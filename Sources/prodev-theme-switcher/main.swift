@@ -166,13 +166,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.refreshIcon()
         }
 
-        // Once, on first ever launch: consent before the first edit, then register
-        // for login. Re-registering every launch would silently undo the user
-        // unticking "Launch at Login". Quit leaves the flag unset, so the question
-        // is asked again next time rather than assumed.
-        if !UserDefaults.standard.bool(forKey: "didFirstRun") {
+        // Consent before the first edit -- on its own flag, so an install that
+        // predates the question is asked once too. Quit leaves it unset, so the
+        // question comes back next launch rather than being assumed.
+        if !UserDefaults.standard.bool(forKey: "consentedToEdits") {
             NSApp.activate(ignoringOtherApps: true)
             guard firstRunConsent() else { NSApp.terminate(nil); return }
+            UserDefaults.standard.set(true, forKey: "consentedToEdits")
+        }
+        // Register once, on first ever launch. Re-registering every launch would
+        // silently undo the user unticking "Launch at Login".
+        if !UserDefaults.standard.bool(forKey: "didFirstRun") {
             UserDefaults.standard.set(true, forKey: "didFirstRun")
             try? SMAppService.mainApp.register()
         }
