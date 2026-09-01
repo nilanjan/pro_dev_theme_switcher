@@ -76,6 +76,20 @@ for d in "$REPO"/config/themes/*/; do
   for f in meta alacritty.toml tmux.conf nvim.lua herdr.toml claude.json; do
     [[ -f "$d/$f" ]] && ok "$slug/$f" || no "$slug/$f" "absent"
   done
+  # A theme that `import`s a file outside the repo is broken on any machine that
+  # does not happen to have that file. This shipped once; it is asserted now.
+  if grep -qE '^[[:space:]]*import[[:space:]]*=' "$d/alacritty.toml"; then
+    no "$slug alacritty.toml self-contained" "imports an external file"
+  else
+    ok "$slug alacritty.toml self-contained"
+  fi
+  # Parse it, rather than grepping: `background` also appears under
+  # [colors.selection], so a line count says nothing about the canvas.
+  eq "$slug canvas is a hex colour" "$(python3 -c "
+import tomllib,pathlib,re
+d=tomllib.loads(pathlib.Path('$d/alacritty.toml').read_text())
+bg=d['colors']['primary']['background']
+print('ok' if re.fullmatch(r'#[0-9a-fA-F]{6}', bg) else f'bad:{bg}')" 2>&1 | tail -1)" "ok"
   for k in mode name nvim herdr accent; do
     v=$(sed -n "s/^$k=//p" "$d/meta")
     [[ -n "$v" ]] && ok "$slug meta.$k=$v" || no "$slug meta.$k" "empty"

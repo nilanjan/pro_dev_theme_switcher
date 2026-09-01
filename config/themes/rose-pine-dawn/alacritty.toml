@@ -1,58 +1,51 @@
-[general]
-import = [ "~/.config/alacritty/themes/themes/rose-pine-dawn.toml" ]
-
-# Rosé Pine Dawn, re-tuned for use as a working UI. Two systemic problems with the
-# upstream port, both fixed by role rather than by taste:
+# Rosé Pine Dawn, re-tuned for use as a working UI.
+#
+# Self-contained on purpose. This used to `import` the upstream port from
+# ~/.config/alacritty/themes, which meant the theme only worked on a machine that
+# happened to have that repo cloned -- everywhere else Alacritty silently fell back
+# to its own defaults. A theme directory should carry everything the theme is.
+#
+# Two systemic changes from the upstream port, both by role rather than by taste:
 #
 # 1. SURFACES. Dawn packs surface/base/hl-low/overlay into 4 lightness points, all
-#    within 7% of pure white -- so the canvas reads as bland white and elevation is
-#    invisible. Reassigned so the canvas sits on `overlay` and every other surface
-#    steps DOWN from it (a light theme separates surfaces by darkening; only a dark
-#    theme lightens). canvas #f2e9e1 / raised #dfdad9 / selected #cecacd.
+#    within 7% of pure white, so the canvas reads as bland white and elevation is
+#    invisible. The canvas sits on `overlay` and every other surface steps DOWN from
+#    it -- a light theme separates surfaces by darkening; only a dark theme lightens.
 #
 # 2. ACCENTS AS TEXT. ANSI colours are always text, and three of Dawn's six accents
 #    fall under 3:1 on the canvas -- gold 1.87, rose 2.37, foam 2.86. Each is walked
 #    down in HLS lightness, hue and saturation untouched, until it clears 3.0:1.
-#    Same reasoning as the ANSI-black fix below, applied to the whole ramp.
 #
-# 3. ANSI 7/15 ARE SURFACES, NOT TEXT. Upstream Dawn maps white to #575279, i.e.
-#    treats ANSI 7 as a foreground. Claude Code's light-ansi theme -- and light
-#    terminal UIs generally -- use it the other way: ansi:white is
-#    userMessageBackground, composerSidebarBackground, memoryBackgroundColor and
-#    inverseText; ansi:whiteBright is the hover and bash fills. So 7/15 carry the
-#    light end of the ramp and 0/8 carry the dark end. Body text comes from
-#    primary.foreground, never from ANSI 7.
-#
-# check.sh gates accents 1-6 at >=3:1 as text and 7/15 as surfaces at or below the
-# canvas, so neither half can silently drift back.
+# ANSI 7/15 carry the LIGHT end of the ramp here, not text; 0/8 carry the dark end,
+# and body text comes from primary.foreground. tests/palette_gate.py enforces all of
+# it, so none of this can silently drift back.
 
 [colors.primary]
 background = '#f2e9e1'   # overlay -- the canvas
 foreground = '#575279'   # text, 6.07:1
 
+[colors.cursor]
+text   = '#575279'
+cursor = '#cecacd'
+
+[colors.vi_mode_cursor]
+text   = '#575279'
+cursor = '#cecacd'
+
 [colors.selection]
-text = '#575279'
-background = '#cecacd'   # selected surface, 1.35:1 against the canvas
+text       = '#575279'
+background = '#cecacd'
 
-[colors.hints]
-start = { foreground = '#f2e9e1', background = '#286983' }
-end   = { foreground = '#f2e9e1', background = '#797593' }
-
-# ANSI 0 upstream is #f2e9e1 (overlay) -- now identical to the canvas, and already
-# invisible against the old one at 1.10:1. TUIs draw bullets, box-drawing and dim
-# text with ANSI 0, so those glyphs vanish. Raised to Dawn's subtle/muted greys.
-# yellow/blue/cyan are gold/foam/rose darkened to 3.01:1; hue is unchanged.
 [colors.normal]
-black   = '#797593'   # subtle          3.67:1
+black   = '#797593'   # subtle          3.67:1  (upstream #f2e9e1 = invisible)
 red     = '#b4637a'   # love            3.50:1
 green   = '#286983'   # pine            5.09:1
 yellow  = '#bf7614'   # gold, darkened  3.01:1  (was #ea9d34, 1.87:1)
 blue    = '#53909a'   # foam, darkened  3.01:1  (was #56949f, 2.86:1)
 magenta = '#907aa9'   # iris            3.16:1
 cyan    = '#cf6864'   # rose, darkened  3.01:1  (was #d7827e, 2.37:1)
-white   = '#e8dedb'   # iris @ 0.9 over the canvas -- a SURFACE, see below
+white   = '#e8dedb'   # a SURFACE, not text -- see header
 
-# Dawn ships bright == normal for 1-6; kept, so no accent drops below the 3:1 gate.
 [colors.bright]
 black   = '#9893a5'
 red     = '#b4637a'
@@ -61,4 +54,8 @@ yellow  = '#bf7614'
 blue    = '#53909a'
 magenta = '#907aa9'
 cyan    = '#cf6864'
-white   = '#ded3d6'   # iris @ 0.8 -- one step stronger, for hover/bash fills
+white   = '#ded3d6'   # one step stronger, for hover and bash fills
+
+[colors.hints]
+start = { foreground = '#f2e9e1', background = '#286983' }
+end   = { foreground = '#f2e9e1', background = '#797593' }

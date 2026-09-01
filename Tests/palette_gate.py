@@ -36,18 +36,19 @@ for mode in ("dark", "light"):
     # other one. The default theme for each mode is the one under test.
     slug = "tokyo-night-storm" if mode == "dark" else "rose-pine-dawn"
     tdir = pathlib.Path("config/themes") / slug
+    # Themes are self-contained: no import to resolve, so this works on any
+    # checkout. It used to follow the upstream import into ~/.config, which meant
+    # the gate could only run on a machine that had that themes repo cloned.
     ov = (tdir / "alacritty.toml").read_text()
-    up_path = re.search(r'import\s*=\s*\[\s*"([^"]+)"', ov).group(1).replace("~", str(HOME))
-    up = pathlib.Path(up_path).read_text()
-    # The override wins where it sets a value; otherwise it comes from the import.
-    bg = field(ov, r"colors\.primary", "background") or field(up, r"colors\.primary", "background")
+    bg = field(ov, r"colors\.primary", "background")
+    assert bg, f"{slug}: no colors.primary background"
     need = THRESHOLD[mode]
     print(f"-- {mode}: canvas {bg}, ANSI floor {need}:1")
 
     # ANSI 0-6 are text at some point -- TUIs draw bullets, box-drawing and dim text
     # with ANSI 0 -- so they must stay legible on the canvas.
     for name in ("black", "red", "green", "yellow", "blue", "magenta", "cyan"):
-        c = field(ov, r"colors\.normal", name) or field(up, r"colors\.normal", name)
+        c = field(ov, r"colors\.normal", name)
         r = cr(bg, c)
         row(r >= need, f"ansi {name}", f"{c} vs {bg} = {r:.2f}:1")
 
@@ -57,7 +58,7 @@ for mode in ("dark", "light"):
     # text, so the text rule applies there instead.
     for sect, name, label in ((r"colors\.normal", "white", "ansi white"),
                               (r"colors\.bright", "white", "ansi whiteBright")):
-        c = field(ov, sect, name) or field(up, sect, name)
+        c = field(ov, sect, name)
         if mode == "light":
             row(luma(c) <= luma(bg) + 1e-9, label, f"{c} at or below canvas (surface)")
         else:
