@@ -80,14 +80,4 @@ jobs:
           echo "smoke: light and dark both applied"
 
       - name: Theme JSON is valid and complete
-        run: |
-          for f in config/themes/*/claude.json; do
-            python3 -c "
-import json,sys
-d=json.load(open('$f'))
-assert d['base'] in ('light','dark'), d['base']
-assert len(d['overrides']) >= 50, len(d['overrides'])
-for k,v in d['overrides'].items():
-    assert v.startswith('#') and len(v)==7, (k,v)
-print('$f', d['base'], len(d['overrides']), 'overrides')"
-          done
+        run: python3 tests/theme_json_test.py

@@ -235,6 +235,7 @@ theme's `herdr.toml`.
 | `swift run core-tests` | 83 checks over `ThemeSwitcherCore` — **100% of lines, 100% of functions** |
 | `./tests/sync_test.sh` | `sync.sh` against a throwaway `HOME`: slug resolution, per-target opt-out, unknown-theme fallback, and that the managed herdr block never accumulates |
 | `python3 tests/palette_gate.py` | contrast and surface rules for every shipped theme; no app or GUI needed |
+| `python3 tests/theme_json_test.py` | every Claude Code theme parses, uses a real base, and has only `#rrggbb` values — its loader silently drops anything malformed rather than erroring |
 | `./check.sh` | the live machine: drives the real app through both modes and asserts every target landed, then runs the palette gate. Restores the appearance it found |
 
 `main.swift` is deliberately **not** covered: `NSStatusItem`, AppleScript and the

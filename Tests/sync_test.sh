@@ -82,4 +82,18 @@ for d in "$REPO"/config/themes/*/; do
   done
 done
 
+echo "== CI workflow parses =="
+# This is here because it already broke once: an embedded python block sat at
+# column 0 inside a `run: |` scalar, which silently ends the block. GitHub reported
+# it only as "workflow file issue" after the push, with no log.
+eq "ci.yml is valid YAML" "$(python3 -c "
+import yaml,sys
+try:
+    d = yaml.safe_load(open('.github/workflows/ci.yml'))
+except Exception as e:
+    print('INVALID:', e); sys.exit(0)
+job = d['jobs']['test']
+assert job['runs-on'].startswith('macos'), job['runs-on']
+print(f\"ok:{len(job['steps'])} steps\")" 2>&1 | tail -1)" "ok:9 steps"
+
 echo; [[ $fail == 0 ]] && echo "SYNC TESTS PASS" || echo "SYNC TESTS FAILED"; exit $fail
