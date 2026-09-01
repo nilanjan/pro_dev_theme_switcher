@@ -97,6 +97,17 @@ public enum Target: String, CaseIterable, Sendable {
     }
     public var prefsKey: String { "skip.\(rawValue)" }
 
+    /// Env var holding a comma list of targets to leave alone for one invocation.
+    public static let skipEnvKey = "PDTS_SKIP"
+
+    /// Parses that list. Unknown tokens are ignored rather than rejected, so a
+    /// typo costs that one target rather than the whole run.
+    public static func parseSkipList(_ raw: String?) -> Set<Target> {
+        Set((raw ?? "").split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .compactMap(Target.init(rawValue:)))
+    }
+
     /// Comma list the sync script parses. Order follows allCases so the value is
     /// stable across runs rather than reflecting Set iteration order.
     public static func skipList(disabled: Set<Target>) -> String {
@@ -123,7 +134,17 @@ extension UserDefaults: PreferenceStore {
 /// itself stays a rendering of this and nothing more.
 public final class Selection {
     private let store: PreferenceStore
-    public init(store: PreferenceStore) { self.store = store }
+    /// Targets skipped for this invocation only, from PDTS_SKIP. The menu writes
+    /// its choices to the store; the environment overrides them without persisting,
+    /// matching how PDTS_LIGHT_THEME / PDTS_DARK_THEME already behave. Without this
+    /// the variable was write-only -- emitted for sync.sh, never honoured by the
+    /// app itself, so `PDTS_SKIP=macos ... --set light` still drove the appearance.
+    private let envSkips: Set<Target>
+
+    public init(store: PreferenceStore, environment: [String: String] = [:]) {
+        self.store = store
+        self.envSkips = Target.parseSkipList(environment[Target.skipEnvKey])
+    }
 
     public func slug(for mode: Mode) -> String {
         store.string(for: mode.prefsKey) ?? mode.defaultSlug
@@ -131,7 +152,9 @@ public final class Selection {
     public func setSlug(_ slug: String, for mode: Mode) {
         store.setString(slug, for: mode.prefsKey)
     }
-    public func isEnabled(_ target: Target) -> Bool { !store.bool(for: target.prefsKey) }
+    public func isEnabled(_ target: Target) -> Bool {
+        !store.bool(for: target.prefsKey) && !envSkips.contains(target)
+    }
     public func setEnabled(_ enabled: Bool, for target: Target) {
         store.setBool(!enabled, for: target.prefsKey)
     }

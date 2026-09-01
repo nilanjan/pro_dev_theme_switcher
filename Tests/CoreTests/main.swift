@@ -102,6 +102,17 @@ T.suite("Target") {
     T.eq(Target.skipList(disabled: [.claude, .macos, .nvim]), "macos,nvim,claude", "declaration order")
     T.eq(Target.skipList(disabled: Set(Target.allCases)),
          "macos,alacritty,nvim,tmux,herdr,claude", "all disabled")
+
+    T.eq(Target.skipEnvKey, "PDTS_SKIP", "env key matches sync.sh")
+    T.eq(Target.parseSkipList("herdr,claude"), [.herdr, .claude], "parses a list")
+    T.eq(Target.parseSkipList(" herdr , claude "), [.herdr, .claude], "tolerates spaces")
+    T.eq(Target.parseSkipList(nil), [], "absent")
+    T.eq(Target.parseSkipList(""), [], "empty")
+    // A typo should cost that one target, not the whole run.
+    T.eq(Target.parseSkipList("herdr,notathing"), [.herdr], "unknown tokens ignored")
+    // Round-trip: what the app emits, the app can read back.
+    T.eq(Target.parseSkipList(Target.skipList(disabled: [.macos, .tmux])),
+         [.macos, .tmux], "round-trips through skipList")
 }
 
 // MARK: - selection
@@ -158,6 +169,32 @@ T.suite("Selection") {
 
     T.eq(Theme(slug: "a", name: "A", mode: .dark), Theme(slug: "a", name: "A", mode: .dark),
          "themes compare by value")
+}
+
+// PDTS_SKIP was write-only once -- emitted for sync.sh but never honoured by the
+// app, so `PDTS_SKIP=macos prodev-theme-switcher --set light` still drove the system
+// appearance. That is what broke the CI smoke test on a runner with no window server.
+T.suite("Selection + PDTS_SKIP") {
+    let store = MemoryStore()
+    let sel = Selection(store: store, environment: ["PDTS_SKIP": "macos,herdr"])
+
+    T.ok(!sel.isEnabled(.macos), "env skip disables macos")
+    T.ok(!sel.isEnabled(.herdr), "env skip disables herdr")
+    T.ok(sel.isEnabled(.tmux), "untouched target stays enabled")
+    T.eq(sel.disabledTargets, [.macos, .herdr], "disabled set reflects the env")
+    T.eq(sel.environment()["PDTS_SKIP"], "macos,herdr", "and is passed on to sync.sh")
+
+    // The env is a per-invocation override: it must not be written back.
+    T.eq(store.bools["skip.macos"], nil, "env skip is not persisted")
+
+    // Store and env compose rather than one replacing the other.
+    let both = Selection(store: store, environment: ["PDTS_SKIP": "tmux"])
+    both.setEnabled(false, for: .claude)
+    T.eq(both.disabledTargets, [.tmux, .claude], "store and env union")
+    T.ok(both.isEnabled(.macos), "neither source disables macos")
+
+    let none = Selection(store: MemoryStore())
+    T.ok(none.isEnabled(.macos), "no environment given -> nothing skipped")
 }
 
 // The UserDefaults conformance is the seam the real app runs through, so it is

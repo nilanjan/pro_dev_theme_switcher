@@ -18,7 +18,8 @@ import ThemeSwitcherCore
 // CI can cover them without a window server. Everything below this point is AppKit
 // glue that only runs on a real desktop.
 
-let prefs = Selection(store: UserDefaults.standard)
+let prefs = Selection(store: UserDefaults.standard,
+                      environment: ProcessInfo.processInfo.environment)
 var installedThemes: [Theme] { Theme.load(root: Theme.defaultRoot) }
 
 let syncScript = NSHomeDirectory() + "/.config/prodev-theme-switcher/sync.sh"
