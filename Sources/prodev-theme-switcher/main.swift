@@ -22,6 +22,10 @@ let prefs = Selection(store: UserDefaults.standard,
                       environment: ProcessInfo.processInfo.environment)
 var installedThemes: [Theme] { Theme.load(root: Theme.defaultRoot) }
 
+/// Re-probed every time the menu opens and on every apply, so installing a tool and
+/// reopening the menu is enough to pick it up -- no watcher, no restart.
+var installedTargets: Set<Target> { Detection.installed(home: Paths.home()) }
+
 let syncScript = Paths.root() + "/sync.sh"
 
 // MARK: - Auto appearance (sunrise/sunset)
@@ -81,7 +85,10 @@ func applyToApps(_ m: Mode) {
     // A GUI app does not inherit the login shell PATH; the script calls tmux/herdr bare.
     env["PATH"] = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:"
                 + Paths.home() + "/.local/bin"
-    for (k, v) in prefs.environment() { env[k] = v }
+    // Uninstalled tools are skipped as well as user-unticked ones: writing config
+    // for something that is not there is how you leave files behind for a tool the
+    // user never had.
+    for (k, v) in prefs.environment(installed: installedTargets) { env[k] = v }
 
     let p = Process()
     p.executableURL = URL(fileURLWithPath: "/bin/bash")
@@ -93,7 +100,7 @@ func applyToApps(_ m: Mode) {
 }
 
 func toggle() {
-    if prefs.isEnabled(.macos) {
+    if prefs.isEnabled(.macos, installed: installedTargets) {
         setAutoAppearance(false)              // an explicit pick leaves Auto, as in System Settings
         setSystemMode(systemMode().flipped)   // observer fires applyToApps
     } else {
@@ -114,7 +121,7 @@ if let i = argv.firstIndex(of: "--set"), i + 1 < argv.count {
         applyToApps(systemMode())
     case let s where Mode(rawValue: s) != nil:
         let m = Mode(rawValue: s)!
-        if prefs.isEnabled(.macos) { setAutoAppearance(false); setSystemMode(m) }
+        if prefs.isEnabled(.macos, installed: installedTargets) { setAutoAppearance(false); setSystemMode(m) }
         applyToApps(m)
     default:
         FileHandle.standardError.write("usage: prodev-theme-switcher --set dark|light|auto|toggle\n".data(using: .utf8)!)
@@ -149,7 +156,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if !UserDefaults.standard.bool(forKey: "didFirstRun") {
             UserDefaults.standard.set(true, forKey: "didFirstRun")
             try? SMAppService.mainApp.register()
+            warnIfNothingToTheme()
         }
+    }
+
+    /// Said once, on first launch only. With nothing but macOS installed the app
+    /// still works, but it is switching one thing -- and a menu bar icon that
+    /// appears to do almost nothing is worse than being told why.
+    private func warnIfNothingToTheme() {
+        guard Detection.onlyMacOS(installedTargets) else { return }
+        let a = NSAlert()
+        a.messageText = "No supported apps found"
+        a.informativeText = """
+            ProDev Theme Switcher will switch the macOS appearance, but it found none \
+            of the tools it themes: Alacritty, Neovim, tmux, herdr or Claude Code.
+
+            Install any of them and reopen the menu — they are detected automatically, \
+            with no restart.
+            """
+        a.alertStyle = .informational
+        a.addButton(withTitle: "OK")
+        a.runModal()
     }
 
     private func refreshIcon() {
@@ -230,12 +257,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         menu.addItem(.separator())
 
+        // Only what is actually on this machine gets a working switch. Everything
+        // else is listed disabled rather than hidden, so it is obvious the app
+        // supports it and equally obvious why it is not doing anything.
+        let installed = installedTargets
         for t in Target.allCases {
-            let i = NSMenuItem(title: t.label, action: #selector(toggleTarget(_:)), keyEquivalent: "")
+            let here = installed.contains(t)
+            let i = NSMenuItem(title: here ? t.label : "\(t.label) — not installed",
+                               action: here ? #selector(toggleTarget(_:)) : nil,
+                               keyEquivalent: "")
             i.target = self
-            i.state = prefs.isEnabled(t) ? .on : .off
+            i.isEnabled = here
+            i.state = prefs.isEnabled(t, installed: installed) ? .on : .off
             i.representedObject = t.rawValue
             menu.addItem(i)
+        }
+        if Detection.onlyMacOS(installed) {
+            let note = NSMenuItem(title: "No supported apps found — macOS only",
+                                  action: nil, keyEquivalent: "")
+            note.isEnabled = false
+            note.toolTip = "Install Alacritty, Neovim, tmux, herdr or Claude Code and "
+                         + "reopen this menu; they are picked up automatically."
+            menu.addItem(note)
         }
         // VS Code follows the OS on its own via window.autoDetectColorScheme, so this
         // app never touches it. Shown disabled rather than as a checkbox that would lie.

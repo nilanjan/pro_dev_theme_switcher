@@ -139,17 +139,17 @@ T.suite("Selection") {
     T.eq(sel.slug(for: .dark), "tokyo-night-storm", "other mode untouched")
 
     for t in Target.allCases { T.ok(sel.isEnabled(t), "\(t.rawValue) enabled by default") }
-    T.ok(sel.disabledTargets.isEmpty, "nothing disabled by default")
+    T.ok(sel.disabledTargets().isEmpty, "nothing disabled by default")
 
     // Stored inverted: an absent key must read as enabled, so a fresh install
     // themes everything rather than nothing.
     sel.setEnabled(false, for: .herdr)
     T.ok(!sel.isEnabled(.herdr), "herdr disabled")
-    T.eq(sel.disabledTargets, [.herdr], "disabled set")
+    T.eq(sel.disabledTargets(), [.herdr], "disabled set")
     T.eq(store.bools["skip.herdr"], true, "persisted inverted")
     sel.setEnabled(true, for: .herdr)
     T.ok(sel.isEnabled(.herdr), "herdr re-enabled")
-    T.ok(sel.disabledTargets.isEmpty, "disabled set cleared")
+    T.ok(sel.disabledTargets().isEmpty, "disabled set cleared")
 
     let themes = [Theme(slug: "rose-pine-dawn", name: "Rosé Pine Dawn", mode: .light)]
     sel.setSlug("rose-pine-dawn", for: .light)
@@ -181,7 +181,7 @@ T.suite("Selection + PDTS_SKIP") {
     T.ok(!sel.isEnabled(.macos), "env skip disables macos")
     T.ok(!sel.isEnabled(.herdr), "env skip disables herdr")
     T.ok(sel.isEnabled(.tmux), "untouched target stays enabled")
-    T.eq(sel.disabledTargets, [.macos, .herdr], "disabled set reflects the env")
+    T.eq(sel.disabledTargets(), [.macos, .herdr], "disabled set reflects the env")
     T.eq(sel.environment()["PDTS_SKIP"], "macos,herdr", "and is passed on to sync.sh")
 
     // The env is a per-invocation override: it must not be written back.
@@ -190,7 +190,7 @@ T.suite("Selection + PDTS_SKIP") {
     // Store and env compose rather than one replacing the other.
     let both = Selection(store: store, environment: ["PDTS_SKIP": "tmux"])
     both.setEnabled(false, for: .claude)
-    T.eq(both.disabledTargets, [.tmux, .claude], "store and env union")
+    T.eq(both.disabledTargets(), [.tmux, .claude], "store and env union")
     T.ok(both.isEnabled(.macos), "neither source disables macos")
 
     let none = Selection(store: MemoryStore())
@@ -219,6 +219,63 @@ T.suite("UserDefaults conformance") {
     let sel = Selection(store: defaults)
     T.eq(sel.slug(for: .light), "rose-pine-dawn", "selection reads it back")
     T.ok(!sel.isEnabled(.tmux), "selection sees the skip")
+}
+
+T.suite("Detection") {
+    let home = "/h"
+    // A config directory is the evidence, not a binary on PATH: the app writes
+    // config, and a tool installed but never configured has nothing to write into.
+    let none = Detection.installed(home: home, exists: { _ in false })
+    T.eq(none, [.macos], "macOS is always present, nothing else assumed")
+    T.ok(Detection.onlyMacOS(none), "onlyMacOS on a bare machine")
+
+    let all = Detection.installed(home: home, exists: { _ in true })
+    T.eq(all, Set(Target.allCases), "everything found")
+    T.ok(!Detection.onlyMacOS(all), "not onlyMacOS when tools exist")
+
+    let some = Detection.installed(home: home, exists: { $0 == "/h/.config/herdr/config.toml" })
+    T.eq(some, [.macos, .herdr], "one tool found")
+    T.ok(!Detection.onlyMacOS(some), "one tool is enough")
+
+    // tmux is set up in more than one place depending on version; any one counts.
+    for p in ["/h/.tmux", "/h/.config/tmux", "/h/.tmux.conf"] {
+        T.ok(Detection.installed(home: home, exists: { $0 == p }).contains(.tmux),
+             "tmux detected via \(p)")
+    }
+    // Exercise the real filesystem default too, against a directory built here --
+    // otherwise the one path that ships is the one path never run.
+    let fm = FileManager.default
+    let tmp = NSTemporaryDirectory() + "pdts-detect-\(UUID().uuidString)"
+    try fm.createDirectory(atPath: tmp + "/.config/herdr", withIntermediateDirectories: true)
+    fm.createFile(atPath: tmp + "/.config/herdr/config.toml", contents: Data())
+    T.eq(Detection.installed(home: tmp), [.macos, .herdr], "real filesystem probe")
+    try? fm.removeItem(atPath: tmp)
+
+    T.eq(Target.macos.probePaths(home: home), [], "macOS needs no probe")
+    for t in Target.allCases where t != .macos {
+        T.ok(t.probePaths(home: home).allSatisfy { $0.hasPrefix(home) },
+             "\(t.rawValue) probes under home")
+    }
+}
+
+T.suite("Selection honours what is installed") {
+    let sel = Selection(store: MemoryStore())
+    let installed: Set<Target> = [.macos, .nvim]
+
+    T.ok(sel.isEnabled(.nvim, installed: installed), "installed and ticked")
+    // Ticked but absent must not count as enabled -- otherwise the app writes
+    // config for a tool the user does not have.
+    T.ok(!sel.isEnabled(.herdr, installed: installed), "ticked but not installed")
+    T.ok(sel.isEnabled(.herdr), "no list given -> no opinion, stays enabled")
+    T.eq(sel.disabledTargets(installed: installed), [.alacritty, .tmux, .herdr, .claude],
+         "everything absent is disabled")
+    T.eq(sel.environment(installed: installed)["PDTS_SKIP"],
+         "alacritty,tmux,herdr,claude", "and is passed to sync.sh")
+
+    // The stored preference must survive a tool being removed and reinstalled.
+    let s2 = Selection(store: MemoryStore())
+    s2.setEnabled(false, for: .nvim)
+    T.ok(!s2.isEnabled(.nvim, installed: [.macos, .nvim]), "unticked stays unticked")
 }
 
 T.suite("Paths") {

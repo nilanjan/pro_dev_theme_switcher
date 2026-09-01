@@ -95,6 +95,21 @@ public enum Target: String, CaseIterable, Sendable {
     }
     public var prefsKey: String { "skip.\(rawValue)" }
 
+    /// Paths that mean "this tool is set up on this machine". Any one is enough:
+    /// a config directory is better evidence than a binary on PATH, because the app
+    /// writes config, and a tool installed but never configured has nothing to
+    /// write into. macOS is the exception -- it is always present.
+    public func probePaths(home: String) -> [String] {
+        switch self {
+        case .macos:     return []
+        case .alacritty: return ["\(home)/.config/alacritty"]
+        case .nvim:      return ["\(home)/.config/nvim"]
+        case .tmux:      return ["\(home)/.tmux", "\(home)/.config/tmux", "\(home)/.tmux.conf"]
+        case .herdr:     return ["\(home)/.config/herdr/config.toml"]
+        case .claude:    return ["\(home)/.claude/settings.json"]
+        }
+    }
+
     /// Env var holding a comma list of targets to leave alone for one invocation.
     public static let skipEnvKey = "PDTS_SKIP"
 
@@ -110,6 +125,32 @@ public enum Target: String, CaseIterable, Sendable {
     /// stable across runs rather than reflecting Set iteration order.
     public static func skipList(disabled: Set<Target>) -> String {
         allCases.filter { disabled.contains($0) }.map(\.rawValue).joined(separator: ",")
+    }
+}
+
+/// Which targets are actually set up on this machine.
+///
+/// The app themes other people's tools, so offering a switch for something that is
+/// not installed is a control that silently does nothing. Detection is re-run every
+/// time the menu opens rather than cached, so installing a tool and reopening the
+/// menu is enough -- no watcher, no restart.
+public enum Detection {
+    /// `exists` is injected so this is testable without touching a real filesystem.
+    public static func installed(
+        home: String,
+        exists: (String) -> Bool = { FileManager.default.fileExists(atPath: $0) }
+    ) -> Set<Target> {
+        var found: Set<Target> = [.macos]          // always there
+        for t in Target.allCases where t != .macos {
+            if t.probePaths(home: home).contains(where: exists) { found.insert(t) }
+        }
+        return found
+    }
+
+    /// True when nothing but macOS was found -- the app still works, but it is
+    /// switching one thing, and the user should be told rather than left guessing.
+    public static func onlyMacOS(_ installed: Set<Target>) -> Bool {
+        installed.subtracting([.macos]).isEmpty
     }
 }
 
@@ -167,14 +208,18 @@ public final class Selection {
     public func setSlug(_ slug: String, for mode: Mode) {
         store.setString(slug, for: mode.prefsKey)
     }
-    public func isEnabled(_ target: Target) -> Bool {
-        !store.bool(for: target.prefsKey) && !envSkips.contains(target)
+    /// A target the user ticked but has since uninstalled must not count as
+    /// enabled: `installed` is the final say, so the stored preference survives a
+    /// tool being removed and reinstalled without silently doing nothing meanwhile.
+    public func isEnabled(_ target: Target, installed: Set<Target>? = nil) -> Bool {
+        guard !store.bool(for: target.prefsKey), !envSkips.contains(target) else { return false }
+        return installed?.contains(target) ?? true
     }
     public func setEnabled(_ enabled: Bool, for target: Target) {
         store.setBool(!enabled, for: target.prefsKey)
     }
-    public var disabledTargets: Set<Target> {
-        Set(Target.allCases.filter { !isEnabled($0) })
+    public func disabledTargets(installed: Set<Target>? = nil) -> Set<Target> {
+        Set(Target.allCases.filter { !isEnabled($0, installed: installed) })
     }
 
     /// Display name for a mode's chosen theme, falling back to the slug when the
@@ -186,9 +231,9 @@ public final class Selection {
 
     /// Environment handed to sync.sh. The script prefers these over its own state
     /// files, so the menu and the CLI cannot disagree about what is selected.
-    public func environment() -> [String: String] {
+    public func environment(installed: Set<Target>? = nil) -> [String: String] {
         [
-            "PDTS_SKIP": Target.skipList(disabled: disabledTargets),
+            "PDTS_SKIP": Target.skipList(disabled: disabledTargets(installed: installed)),
             Mode.light.themeEnvKey: slug(for: .light),
             Mode.dark.themeEnvKey: slug(for: .dark),
         ]

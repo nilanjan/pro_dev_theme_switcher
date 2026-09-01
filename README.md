@@ -1,75 +1,51 @@
 <div align="center">
-  <img src="Resources/logo.svg" alt="" width="112" height="112">
-</div>
 
-<h1 align="center">ProDev Theme Switcher</h1>
+<img src="Resources/preview/logo.png" alt="ProDev Theme Switcher" width="104" height="104">
 
-<p align="center">
-  <em>An iris: the instrument that decides how much light gets through.</em>
-</p>
+# ProDev Theme Switcher
+
+**One click. Your whole terminal stack changes theme together.**
+
+macOS appearance, Alacritty, tmux, Neovim, herdr and Claude Code — light or dark,
+in step, in about a second.
 
 [![CI](https://github.com/nilanjan/pro_dev_theme_switcher/actions/workflows/ci.yml/badge.svg)](https://github.com/nilanjan/pro_dev_theme_switcher/actions/workflows/ci.yml)
 [![Platform](https://img.shields.io/badge/platform-macOS%2014%2B-lightgrey)](#requirements)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-[![Coverage](https://img.shields.io/badge/ThemeSwitcherCore-100%25%20lines-brightgreen)](#tests)
+[![Coverage](https://img.shields.io/badge/core-100%25%20lines-brightgreen)](#tests)
 
-macOS menu bar app that switches your whole development stack — the OS, terminal,
-multiplexer, editor and Claude Code — between a light and a dark theme in one click.
-
-Ships with **Tokyo Night Storm** (dark) and **Rosé Pine Dawn** (light). Themes are
-directories on disk, so adding more needs no rebuild.
-
-<sub>The mark is built on the one hue both shipped palettes share — the Rosé Pine
-spec calls it <code>iris</code>, <code>#907aa9</code>. Six blades, seams raked
-0.62&nbsp;rad off-radius so it reads as rotating rather than as a star.
-<code>tools/mkicon.swift</code> regenerates the <code>.icns</code> from that same
-geometry, so the icon can never drift from
-<a href="Resources/logo.svg"><code>logo.svg</code></a>.</sub>
+</div>
 
 ---
 
-> ## ⚠️ READ BEFORE INSTALLING
->
-> **No warranty. Use at your own risk.** Provided "AS IS" — see [LICENSE](LICENSE).
->
-> **🍎 Not from Apple. Not notarized. Not on the Mac App Store.** This is signed with
-> an ad-hoc signature and distributed directly by the author. Gatekeeper will warn
-> you and may refuse the first launch; you must allow it manually in
-> **System Settings → Privacy & Security**. Apple has not reviewed, approved or
-> endorsed it.
->
-> **🔒 It uses a private Apple API.** The **Auto** (sunrise/sunset) feature calls
-> into the undocumented `SkyLight` framework, because macOS exposes no public API
-> for that setting. Apple may break it in any update. Light and Dark use only
-> public APIs — just don't use Auto if this concerns you.
->
-> **📝 It overwrites other applications' config files** — Alacritty, tmux, Neovim,
-> herdr and Claude Code — on **every single switch**. Edits to
-> `herdr/config.toml` and `~/.claude/settings.json` are in-place `sed` and
-> **cannot be undone**. **Back those files up before your first run.** Hand-edits
-> inside the regions it manages will be lost.
->
-> **™ Not affiliated with** Apple, Anthropic, Alacritty, tmux, Neovim, herdr,
-> Microsoft or GitHub. Bundled palettes are **modified** adaptations of
-> [Tokyo Night](https://github.com/folke/tokyonight.nvim) and
-> [Rosé Pine](https://rosepinetheme.com) — don't report issues with them upstream.
->
-> **♿ The contrast gate is a signal, not a conformance claim.** Passing it does not
-> mean any theme meets WCAG or any other accessibility standard.
->
-> **📖 Full terms: [DISCLAIMER.md](DISCLAIMER.md) — please read it.**
+## The problem it solves
+
+You move a window into the sun and your terminal is unreadable. So you change
+Alacritty. Then tmux's status bar is still dark. Then Neovim. Then the thing in the
+other pane. Five configs, three of which you have to look up, and you do it again at
+sunset.
+
+This is one click in the menu bar. Everything follows, including apps launched
+afterwards. Set it to **Auto** and it tracks sunrise and sunset on its own.
+
+It also fixes the themes. Both upstream palettes ship colours that are effectively
+invisible on their own background — Tokyo Night's ANSI black sits at **1.20:1**,
+where box-drawing and bullets simply disappear. Every colour here is checked against
+its background, and CI fails if one drops below the threshold.
+
+## What it looks like
+
+<div align="center">
+  <img src="Resources/preview/light.png" alt="Rosé Pine Dawn preview" width="49%">
+  <img src="Resources/preview/dark.png" alt="Tokyo Night Storm preview" width="49%">
+</div>
+
+<sub>Rendered directly from the shipped theme files, contrast figures included — so
+these cannot drift from what the app actually installs.</sub>
 
 ---
 
-## User guide
-
-### Requirements
-
-macOS 14 or later, Apple silicon or Intel. Command Line Tools are enough to build —
-no full Xcode needed. **macOS only**; there are no plans for other platforms, since
-the app exists to drive the macOS appearance setting.
-
-### Install
+## Install
 
 ```sh
 git clone https://github.com/nilanjan/pro_dev_theme_switcher.git
@@ -77,95 +53,102 @@ cd pro_dev_theme_switcher
 make install
 ```
 
-Builds the app, signs it ad-hoc, copies it to `/Applications`, installs the themes
-and launches it. The icon appears in the menu bar.
+Builds, signs, installs the themes, and launches. The icon appears in your menu bar.
+Command Line Tools are enough — no full Xcode.
 
-**First launch:** macOS will block it because it is not notarized. Open
-**System Settings → Privacy & Security**, scroll to the message about
-*ProDev Theme Switcher*, and click **Open Anyway**. You will also be asked to allow
-it to control **System Events** — that is how it flips the system appearance. Deny
-it and everything except the macOS target still works.
+**On first launch** macOS blocks it, because it is not notarized. Open
+**System Settings → Privacy & Security**, find the message about *ProDev Theme
+Switcher*, and click **Open Anyway**. You will also be asked to allow it to control
+**System Events** — that is how it flips the appearance. Decline and everything
+except the macOS switch still works.
 
-### Everyday use
+### Requirements
 
-| Action | What happens |
+macOS 14+, Apple silicon or Intel. Nothing else is required: the app detects which
+of the supported tools you have and only touches those. If you have none of them, it
+says so on first launch rather than sitting there appearing to do nothing.
+
+## Using it
+
+| | |
 |---|---|
-| **Left-click** the menu bar icon | Toggle light ⇄ dark now |
+| **Left-click** the icon | Toggle light ⇄ dark now |
 | **Right-click** | Open the panel |
 
-The icon shows the current state: ☀︎ light, ☾ dark, ◐ Auto.
-
-### The panel
+The icon is the current state: ☀︎ light, ☾ dark, ◐ Auto.
 
 ```
-Light — Rosé Pine Dawn          <- current mode and theme
-────────────────────────────
+Light — Rosé Pine Dawn                 current mode and theme
+──────────────────────────
   ☀︎ Light                 ✓
   ☾ Dark
-  ◐ Auto                        <- follow the macOS sunrise/sunset schedule
-────────────────────────────
-  ☀︎ Light Theme          ▸     <- pick which theme light mode uses
-  ☾ Dark Theme           ▸     <- ...and dark
-────────────────────────────
-  macOS                   ✓     <- per-target opt-out
+  ◐ Auto                             follow macOS sunrise/sunset
+──────────────────────────
+  ☀︎ Light Theme          ▸           which theme light mode uses
+  ☾ Dark Theme           ▸           …and dark
+──────────────────────────
+  macOS                   ✓          per-target opt-out
   Alacritty               ✓
   Neovim                  ✓
   tmux                    ✓
-  herdr                   ✓
+  herdr — not installed              detected, greyed out
   Claude Code             ✓
-  VS Code — follows macOS       <- native, never touched
-────────────────────────────
+  VS Code — follows macOS            native, never touched
+──────────────────────────
   Launch at Login         ✓
-  Quit ProDev Theme Switcher
+  Quit
 ```
 
-**Light / Dark / Auto.** Auto hands control to the macOS sunrise/sunset schedule.
-The app keeps syncing because it listens for the appearance notification, so your
-terminals follow the schedule too. Picking Light or Dark explicitly leaves Auto,
-exactly as System Settings behaves.
+**Auto** hands over to the macOS sunrise/sunset schedule. The app keeps syncing
+because it listens for the appearance notification, so your terminals follow the
+schedule too. Choosing Light or Dark explicitly leaves Auto, exactly as System
+Settings behaves.
 
-**Light Theme / Dark Theme.** Choose which installed theme each mode uses. Picking a
-theme for the mode you are currently in applies it immediately; picking for the
-other mode just records it, so nothing flashes. The choice persists.
+**Light Theme / Dark Theme** pick which installed theme each mode uses. Choosing for
+the mode you are currently in applies it immediately; choosing for the other mode
+just records it, so nothing flashes.
 
-**Per-target opt-out.** Untick a target and it is left alone on every switch —
-useful when one tool is mid-task, or if you would rather it never touched a given
-config file. VS Code is shown disabled because it follows the OS natively via
-`window.autoDetectColorScheme`; the app never touches it.
+**Per-target opt-out** — untick a tool and it is left alone on every switch. Useful
+when something is mid-task, or if you would rather it never touched a given file.
 
-### CLI
+**Only what you have.** The list is re-checked every time you open the menu.
+Anything not installed is shown greyed out rather than hidden, so it is clear the
+app supports it and equally clear why it is idle. Install a tool, reopen the menu,
+and it is live — no restart.
+
+### From the terminal
 
 ```sh
 prodev-theme-switcher --set dark|light|auto|toggle
 ```
 
-Headless. Worth binding to a hotkey — it is on `<leader>tt` in Neovim. Override the
-theme for one run without changing your saved choice:
+Worth binding to a hotkey — it is on `<leader>tt` in Neovim. Override for a single
+run without changing your saved choice:
 
 ```sh
-PDTS_LIGHT_THEME=some-other-theme prodev-theme-switcher --set light
-PDTS_SKIP=herdr,claude prodev-theme-switcher --set dark
+PDTS_LIGHT_THEME=some-theme prodev-theme-switcher --set light
+PDTS_SKIP=herdr,claude      prodev-theme-switcher --set dark
 ```
 
 ### Adding a theme
 
-Create `config/themes/<slug>/` with these files, then `make install-config`. It
-appears in the right submenu on the next right-click. Nothing is compiled in.
+Drop a directory into `config/themes/<slug>/` and run `make install-config`. It
+appears in the right submenu on the next right-click — nothing is compiled in.
 
 | File | Target |
 |---|---|
-| `meta` | `mode`, display `name`, and per-target ids (`nvim`, `herdr`, `accent`) |
-| `alacritty.toml` | terminal palette |
+| `meta` | `mode`, display `name`, per-target ids (`nvim`, `herdr`, `accent`) |
+| `alacritty.toml` | terminal palette — self-contained, no imports |
 | `tmux.conf` | status bar and pane borders |
 | `nvim.lua` | base46 theme table |
 | `herdr.toml` | the `[theme.custom]` block |
 | `claude.json` | Claude Code custom theme |
 
-`meta` exists because a slug is not always what a target calls the same theme —
+`meta` exists because a slug is not always what a target calls the same theme:
 `tokyo-night-storm` is `tokyonight-storm` to base46 and `tokyo-night` to herdr.
 
-Run `python3 tests/palette_gate.py` afterwards: it will tell you which contrast rule
-a new palette breaks rather than letting it through silently.
+Then run `python3 tests/palette_gate.py` — it names the contrast rule a new palette
+breaks instead of letting it through.
 
 ### Uninstall
 
@@ -174,18 +157,16 @@ make uninstall
 ```
 
 Removes the app, `~/.config/prodev-theme-switcher`, and the preferences domain.
-**Files it wrote into other tools' configs are left in place** — restore your own
-backups if you want them back.
+Files written into other tools' configs stay put — restore your own backups.
 
 ---
 
 ## How it works
 
-macOS appearance is the single source of truth. The app flips it, then reacts to
-`AppleInterfaceThemeChangedNotification` and runs
-`~/.config/prodev-theme-switcher/sync.sh`, which applies the theme selected for that
-mode. Switching from Control Center or the sunrise/sunset schedule therefore works
-too.
+macOS appearance is the single source of truth. The app flips it, reacts to
+`AppleInterfaceThemeChangedNotification`, and runs
+`~/.config/prodev-theme-switcher/sync.sh` for the theme selected for that mode. So
+switching from Control Center or the sunset schedule works too.
 
 | Target | Mechanism |
 |---|---|
@@ -195,57 +176,48 @@ too.
 | Neovim | base46 user theme + state file, `FocusGained` reload |
 | herdr | `config.toml` rewrite + `server reload-config` |
 | Claude Code | `~/.claude/themes/<slug>.json` + settings `theme: custom:<slug>` |
-| VS Code | native `window.autoDetectColorScheme` |
+| VS Code | native `window.autoDetectColorScheme` — untouched |
 
 `sync.sh` takes a `mkdir` mutex: the app invokes it directly *and* from its
-appearance-notification observer, and overlapping runs used to corrupt herdr's TOML.
+appearance observer, and overlapping runs used to corrupt herdr's TOML.
 
 ## Palette
 
 Colours are assigned by **role**, not by palette name, and the gate enforces it.
 
 **Surfaces.** Dawn packs surface/base/hl-low/overlay into four lightness points, all
-within 7% of pure white, so the canvas read as bland white and elevation was
-invisible. The canvas sits on `overlay` `#f2e9e1` and every other surface steps
-*down* from it — a light theme separates surfaces by darkening; only a dark theme
-lightens. Mirroring Storm's chrome literally is what painted the pane gaps and the
-selected sidebar row near-white.
+within 7% of pure white — the canvas read as bland white and elevation was
+invisible. The canvas now sits on `overlay` `#f2e9e1` and every other surface steps
+*down* from it: a light theme separates surfaces by darkening; only a dark theme
+lightens.
 
-**Accents as text.** Every Storm accent clears 5.4:1 on its canvas; three Dawn
+**Accents as text.** Every Storm accent clears 5.4:1 on its canvas. Three Dawn
 accents did not — gold 1.87, rose 2.37, foam 2.86. Each is walked down in HLS
-lightness, hue and saturation preserved, until it clears 3.0:1
-(`#bf7614` / `#cf6864` / `#53909a`).
+lightness, hue and saturation preserved, until it clears 3.0:1.
 
 **ANSI.** Both upstream ports ship an ANSI black invisible on their own background
-(Storm `#32344a` = 1.20:1, Dawn `#f2e9e1` = 1.10:1); TUIs draw bullets and
-box-drawing with ANSI 0, so those glyphs vanished. Beyond that, slots 7/15 carry the
-*light* end of a light theme rather than text, so they are gated as surfaces in
-light and as text in dark.
+(Storm `#32344a` = 1.20:1, Dawn `#f2e9e1` = 1.10:1). Slots 7/15 carry the *light*
+end of a light theme rather than text, so they are gated as surfaces in light and as
+text in dark.
 
-**herdr** overloads `surface_dim` for both the selected sidebar row and the tab-chip
+**herdr** reuses `surface_dim` for both the selected sidebar row and the tab-chip
 label, so the label cannot be recoloured alone; each theme darkens the accent fill
-instead until the label clears 4.5:1. Its token→surface mapping is undocumented and
-was established by splitting tokens one at a time; the roles are recorded in each
-theme's `herdr.toml`.
+until the label clears 4.5:1.
 
 ## Tests
 
 | Command | Covers |
 |---|---|
-| `swift run core-tests` | 83 checks over `ThemeSwitcherCore` — **100% of lines, 100% of functions** |
-| `./tests/sync_test.sh` | `sync.sh` against a throwaway `HOME`: slug resolution, per-target opt-out, unknown-theme fallback, and that the managed herdr block never accumulates |
-| `python3 tests/palette_gate.py` | contrast and surface rules for every shipped theme; no app or GUI needed |
-| `python3 tests/theme_json_test.py` | every Claude Code theme parses, uses a real base, and has only `#rrggbb` values — its loader silently drops anything malformed rather than erroring |
-| `./check.sh` | the live machine: drives the real app through both modes and asserts every target landed, then runs the palette gate. Restores the appearance it found |
+| `swift run core-tests` | 126 checks over `ThemeSwitcherCore` — **100% of lines and functions** |
+| `./tests/sync_test.sh` | `sync.sh` against a throwaway `HOME`: slug resolution, opt-out, unknown-theme fallback, and that the managed herdr block never accumulates |
+| `python3 tests/palette_gate.py` | contrast and surface rules for every shipped theme |
+| `python3 tests/theme_json_test.py` | Claude Code themes parse and are complete — its loader drops malformed overrides silently |
+| `./check.sh` | the live machine, end to end; restores the appearance it found |
 
-`main.swift` is deliberately **not** covered: `NSStatusItem`, AppleScript and the
-SkyLight `dlsym` calls all need a window server that no CI runner has. That boundary
-is why the model lives in its own target — everything that makes a decision is on
-the testable side of it, and CI fails if `ThemeSwitcherCore` drops below 100%.
-
-CI runs all four on every push and pull request, plus a smoke test that builds the
-real `.app`, verifies its signature, and drives the CLI through both modes against a
-scratch `HOME`.
+`main.swift` is deliberately not covered: `NSStatusItem`, AppleScript and the
+SkyLight `dlsym` calls need a window server no runner has. That boundary is why the
+model lives in its own target — every decision sits on the testable side, and CI
+fails if it drops below 100%.
 
 ## Build
 
@@ -257,9 +229,34 @@ make check           # live end-to-end check
 make uninstall
 ```
 
-Swift 6.4's default XCBuild backend requires full Xcode, so the Makefile passes
-`--build-system native`.
+---
+
+> ### ⚠️ Before you install
+>
+> **No warranty. Use at your own risk** — see [LICENSE](LICENSE).
+>
+> **Not from Apple. Not notarized. Not on the App Store.** Ad-hoc signed and
+> distributed directly by the author. Gatekeeper will warn you.
+>
+> **It uses a private Apple API.** *Auto* calls the undocumented `SkyLight`
+> framework, because macOS exposes no public API for that setting. Apple may break
+> it in any update. Light and Dark use only public APIs.
+>
+> **It overwrites other apps' config files** — on every switch. Edits to
+> `herdr/config.toml` and `~/.claude/settings.json` are in-place `sed` and
+> **cannot be undone**. **Back those up first.** Hand-edits inside the regions it
+> manages will be lost.
+>
+> **Not affiliated with** Apple, Anthropic, Alacritty, tmux, Neovim, herdr,
+> Microsoft or GitHub. Bundled palettes are **modified** adaptations of
+> [Tokyo Night](https://github.com/folke/tokyonight.nvim) and
+> [Rosé Pine](https://rosepinetheme.com) — don't report issues with them upstream.
+>
+> **The contrast gate is a signal, not a conformance claim.** Passing it does not
+> mean any theme meets WCAG or any other accessibility standard.
+>
+> **Full terms: [DISCLAIMER.md](DISCLAIMER.md).**
 
 ## License
 
-MIT — see [LICENSE](LICENSE). Legal and usage terms: **[DISCLAIMER.md](DISCLAIMER.md)**.
+MIT — see [LICENSE](LICENSE).
