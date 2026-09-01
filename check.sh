@@ -37,10 +37,11 @@ for m in dark light; do
   eq nvim      "$(tr -d '[:space:]' < ~/.local/share/nvim/theme_state.txt)"           "$nv"
   eq zsh       "$(tr -d '[:space:]' < ~/.zsh_theme_mode)"                             "$m"
   # A real custom theme, not a built-in: see config/sync.sh for why.
-  eq claude    "$(json ~/.claude/settings.json theme)"                            "custom:$slug"
+  eq claude    "$(json ~/.claude/settings.json theme)"                            "custom:prodev-theme-switcher"
+  eq claude-name "$(json ~/.claude/themes/prodev-theme-switcher.json name)"        "$(meta name)"
   eq claude-thm "$(python3 -c "
 import json,pathlib
-d=json.load(open(pathlib.Path.home()/'.claude/themes/$slug.json'))
+d=json.load(open(pathlib.Path.home()/'.claude/themes/prodev-theme-switcher.json'))
 print(f\"{d['base']}:{len(d['overrides'])}\")" 2>/dev/null)"                                 "$m:55"
   eq herdr     "$(sed -n '/^\[theme\]/,/^\[/p' ~/.config/herdr/config.toml | sed -n 's/^name = "\(.*\)"/\1/p')" "$hd"
   # The chip label is surface_dim, shared with the selected sidebar row, so it

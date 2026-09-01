@@ -32,14 +32,19 @@ eq "nvim state"      "$(cat "$SANDBOX/.local/share/nvim/theme_state.txt")" "rose
 eq "zsh mode"        "$(cat "$SANDBOX/.zsh_theme_mode")"                   "light"
 eq "herdr base"      "$(sed -n 's/^name = "\(.*\)"/\1/p' "$SANDBOX/.config/herdr/config.toml")" "rose-pine-dawn"
 eq "herdr accent"    "$(sed -n 's/^accent = "\(.*\)"/\1/p' "$SANDBOX/.config/herdr/config.toml")" "#695482"
-eq "claude theme"    "$(sed -n 's/.*"theme": "\(.*\)".*/\1/p' "$SANDBOX/.claude/settings.json")" "custom:rose-pine-dawn"
+eq "claude theme"    "$(sed -n 's/.*"theme": "\(.*\)".*/\1/p' "$SANDBOX/.claude/settings.json")" "custom:prodev-theme-switcher"
+eq "claude file"     "$(plutil -extract name raw "$SANDBOX/.claude/themes/prodev-theme-switcher.json" 2>&1)" "Rosé Pine Dawn"
 has "alacritty copied" "#f2e9e1" "$SANDBOX/.config/alacritty/themes/custom/light.toml"
 has "tmux copied"      "#f2e9e1" "$SANDBOX/.tmux/themes/light.conf"
 
 run dark
 eq "nvim state (dark)" "$(cat "$SANDBOX/.local/share/nvim/theme_state.txt")" "tokyonight-storm"
 eq "herdr base (dark)" "$(sed -n 's/^name = "\(.*\)"/\1/p' "$SANDBOX/.config/herdr/config.toml")" "tokyo-night"
-eq "claude (dark)"     "$(sed -n 's/.*"theme": "\(.*\)".*/\1/p' "$SANDBOX/.claude/settings.json")" "custom:tokyo-night-storm"
+eq "claude (dark)"     "$(sed -n 's/.*"theme": "\(.*\)".*/\1/p' "$SANDBOX/.claude/settings.json")" "custom:prodev-theme-switcher"
+# The slug never changes; the file behind it does. That is what a running Claude
+# Code session can follow -- it watches the file, and reads the key only at start.
+eq "claude file (dark)" "$(plutil -extract name raw "$SANDBOX/.claude/themes/prodev-theme-switcher.json" 2>&1)" "Tokyo Night Storm"
+eq "claude file base"   "$(plutil -extract base raw "$SANDBOX/.claude/themes/prodev-theme-switcher.json" 2>&1)" "dark"
 
 echo "== the managed block does not accumulate =="
 # Overlapping runs used to leave two [theme.custom] tables behind, which is invalid
@@ -101,8 +106,8 @@ has "init.lua loads the switcher module"        'pcall(require, "prodev_theme")'
 [[ -f "$SANDBOX/.config/nvim/lua/themes/rose-pine-dawn.lua" ]] && ok "base46 table installed" || no "base46 table installed" "absent"
 eq  "herdr got a [theme] table"                 "$(sed -n 's/^name = "\(.*\)"/\1/p' "$SANDBOX/.config/herdr/config.toml")" "rose-pine-dawn"
 eq  "herdr config is still valid TOML"          "$(toml_ok "$SANDBOX/.config/herdr/config.toml")" "ok"
-eq  "claude got a theme key"                    "$(plutil -extract theme raw "$SANDBOX/.claude/settings.json" 2>&1)" "custom:rose-pine-dawn"
-[[ -f "$SANDBOX/.claude/themes/rose-pine-dawn.json" ]] && ok "claude theme file installed" || no "claude theme file installed" "absent"
+eq  "claude got a theme key"                    "$(plutil -extract theme raw "$SANDBOX/.claude/settings.json" 2>&1)" "custom:prodev-theme-switcher"
+[[ -f "$SANDBOX/.claude/themes/prodev-theme-switcher.json" ]] && ok "claude theme file installed" || no "claude theme file installed" "absent"
 # The markers must be comments in the host language: `#` is not one in Lua.
 has "init.lua block uses Lua comments" '-- >>> ProDev Theme Switcher managed >>>' "$SANDBOX/.config/nvim/init.lua"
 if command -v nvim >/dev/null; then
@@ -177,7 +182,7 @@ has "import went to ~/.alacritty.toml" 'current.toml' "$SANDBOX/.alacritty.toml"
 echo "== Claude Code installed but never configured: settings.json is created, not skipped =="
 fresh; rm "$SANDBOX/.claude/settings.json"
 run light
-eq "theme key in a new settings.json" "$(plutil -extract theme raw "$SANDBOX/.claude/settings.json" 2>&1)" "custom:rose-pine-dawn"
+eq "theme key in a new settings.json" "$(plutil -extract theme raw "$SANDBOX/.claude/settings.json" 2>&1)" "custom:prodev-theme-switcher"
 
 echo "== originals are backed up once, before the first edit, and --restore puts them back =="
 fresh

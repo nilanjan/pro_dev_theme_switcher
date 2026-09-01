@@ -235,22 +235,30 @@ import = [\"$apath\"]
   # Pin it explicitly instead. The built-in themes cannot match a custom palette --
   # the RGB ones hardcode their own near-white message band, and the -ansi ones can
   # only reach the 16 terminal slots, which TUIs already own -- so each theme ships
-  # a real custom theme in ~/.claude/themes, referenced as custom:<slug>.
+  # a real custom theme. It goes into ONE fixed file, rewritten on every switch:
+  # Claude Code watches ~/.claude/themes for changes but only re-reads the settings
+  # key at startup, so a fixed slug is what lets a running session follow the
+  # switch live. (The slug is the filename; the display name is the file's `name`.)
   claude_cfg="$HOME/.claude/settings.json"
+  claude_ref="custom:prodev-theme-switcher"
   if ! skip claude && [[ -d "$HOME/.claude" ]] && [[ -f "$dir/claude.json" ]]; then
     mkdir -p "$HOME/.claude/themes"
-    cp "$dir/claude.json" "$HOME/.claude/themes/$slug.json"
+    # atomic: the watcher must never see a half-written file (a .tmp is not .json, so it is ignored)
+    cp "$dir/claude.json" "$HOME/.claude/themes/.prodev-theme-switcher.json.tmp"
+    mv -f "$HOME/.claude/themes/.prodev-theme-switcher.json.tmp" "$HOME/.claude/themes/prodev-theme-switcher.json"
     backup "$claude_cfg"
     if [[ ! -f "$claude_cfg" || -z "$(tr -d '[:space:]{}' < "$claude_cfg")" ]]; then
       # a fresh install has no settings.json, or an empty one -- which plutil
       # would misread as an OpenStep plist and refuse to write back
-      printf '{\n  "theme": "custom:%s"\n}\n' "$slug" > "$claude_cfg"
+      printf '{\n  "theme": "%s"\n}\n' "$claude_ref" > "$claude_cfg"
+    elif grep -qF "\"$claude_ref\"" "$claude_cfg"; then
+      :   # already pinned; rewriting settings.json for nothing would only churn it
     elif grep -qE '"theme"[[:space:]]*:' "$claude_cfg"; then
       /usr/bin/sed -i '' -E \
-        "s/(\"theme\"[[:space:]]*:[[:space:]]*)\"[^\"]*\"/\1\"custom:$slug\"/" "$claude_cfg"
+        "s/(\"theme\"[[:space:]]*:[[:space:]]*)\"[^\"]*\"/\1\"$claude_ref\"/" "$claude_cfg"
     else
       # plutil reads JSON as a plist and writes it back as JSON; -r keeps it readable
-      /usr/bin/plutil -replace theme -string "custom:$slug" -r "$claude_cfg"
+      /usr/bin/plutil -replace theme -string "$claude_ref" -r "$claude_cfg"
     fi
   fi
 

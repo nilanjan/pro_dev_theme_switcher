@@ -107,8 +107,8 @@ jobs:
             [ "$mode" = light ] && slug=rose-pine-dawn nv=rose-pine-dawn bg='#f2e9e1' \
                                 || slug=tokyo-night-storm nv=tokyonight-storm bg='#24283b'
             check "self-installed"  "apply_mode"    "$HOME/.config/prodev-theme-switcher/sync.sh"
-            check "claude theme"    "custom:$slug"  "$HOME/.claude/settings.json"
-            check "claude file"     "overrides"     "$HOME/.claude/themes/$slug.json"
+            check "claude theme"    "custom:prodev-theme-switcher" "$HOME/.claude/settings.json"
+            check "claude file"     "$bg"           "$HOME/.claude/themes/prodev-theme-switcher.json"
             check "nvim state"      "$nv"           "$HOME/.local/share/nvim/theme_state.txt"
             check "nvim wired"      "prodev_theme"  "$HOME/.config/nvim/init.lua"
             check "nvim module"     "colorscheme"   "$HOME/.config/nvim/lua/prodev_theme.lua"

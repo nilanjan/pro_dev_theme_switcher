@@ -209,7 +209,7 @@ dotfiles happened to read — and did nothing on anyone else's Mac.
 | tmux | `~/.tmux/themes/current.conf`, `source-file`d from the end of your tmux conf; a running server is told at once |
 | Neovim | state file + `lua/prodev_theme.lua`, required from the end of `init.lua`; applies the colorscheme if its plugin is installed ([tokyonight.nvim](https://github.com/folke/tokyonight.nvim), [rose-pine/neovim](https://github.com/rose-pine/neovim)), else flips `background`; re-checked on `FocusGained`. The base46 table is also installed for NvChad |
 | herdr | `[theme] name` (table created if absent), `[ui] accent`, managed `[theme.custom]` block + `server reload-config` |
-| Claude Code | `~/.claude/themes/<slug>.json` + `settings.json` `theme: custom:<slug>` — key added, or the file created, if missing |
+| Claude Code | one fixed theme file, `~/.claude/themes/prodev-theme-switcher.json`, rewritten on every switch; `settings.json` pinned once to `theme: custom:prodev-theme-switcher` (key added, or the file created, if missing). Claude Code watches that directory but reads the key only at startup, so the fixed slug is what lets a **running** session follow the switch; `/theme` shows it under the current theme's name |
 | VS Code | native `window.autoDetectColorScheme` — untouched |
 
 `sync.sh` takes a `mkdir` mutex: the app invokes it directly *and* from its
