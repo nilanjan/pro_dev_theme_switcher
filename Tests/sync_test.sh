@@ -9,7 +9,7 @@ fail=0
 ok(){ printf '  \033[32m✓\033[0m %s\n' "$1"; }
 no(){ printf '  \033[31m✗\033[0m %-42s got %s\n' "$1" "$2"; fail=1; }
 eq(){ [[ "$2" == "$3" ]] && ok "$1" || no "$1" "'$2' want '$3'"; }
-has(){ grep -qF "$2" "$3" && ok "$1" || no "$1" "missing from $3"; }
+has(){ grep -qF -- "$2" "$3" && ok "$1" || no "$1" "missing from $3"; }
 
 SANDBOX=$(mktemp -d)
 trap 'rm -rf "$SANDBOX"' EXIT
@@ -23,7 +23,7 @@ setup(){
     > "$SANDBOX/.config/herdr/config.toml"
   printf '{\n  "theme": "auto"\n}\n' > "$SANDBOX/.claude/settings.json"
 }
-run(){ HOME="$SANDBOX" bash "$REPO/config/sync.sh" --quiet "$@"; }
+run(){ TMUX_TMPDIR="$SANDBOX" HOME="$SANDBOX" bash "$REPO/config/sync.sh" --quiet "$@"; }
 
 echo "== default themes =="
 setup
@@ -69,6 +69,146 @@ PDTS_SKIP=herdr,claude run light
 eq "herdr untouched"  "$(sed -n 's/^name = "\(.*\)"/\1/p' "$SANDBOX/.config/herdr/config.toml")" "placeholder"
 eq "claude untouched" "$(sed -n 's/.*"theme": "\(.*\)".*/\1/p' "$SANDBOX/.claude/settings.json")" "auto"
 eq "nvim still themed" "$(cat "$SANDBOX/.local/share/nvim/theme_state.txt")" "rose-pine-dawn"
+
+echo "== a fresh machine: the tools are there, none of the author's dotfile hooks are =="
+# This is the bug that shipped. sync.sh copied theme files to paths that only the
+# author's own dotfiles read (theme-switch.sh, theme-switcher.sh, theme_manager.lua)
+# and edited [theme]/"theme" keys that only the author's configs already had. On any
+# other Mac the files appeared and nothing changed. So: bare configs, no hooks.
+fresh(){
+  rm -rf "$SANDBOX"
+  mkdir -p "$SANDBOX/.config/prodev-theme-switcher" "$SANDBOX/.config/alacritty" \
+           "$SANDBOX/.config/nvim" "$SANDBOX/.config/herdr" "$SANDBOX/.claude"
+  cp -R "$REPO/config/themes" "$SANDBOX/.config/prodev-theme-switcher/themes"
+  cp -R "$REPO/config/nvim"   "$SANDBOX/.config/prodev-theme-switcher/nvim"
+  printf '[font]\nsize = 13\n'          > "$SANDBOX/.config/alacritty/alacritty.toml"
+  printf 'set -g mouse on\n'            > "$SANDBOX/.tmux.conf"
+  printf 'vim.o.number = true\n'        > "$SANDBOX/.config/nvim/init.lua"
+  printf '[ui]\nconfirm_close = true\n' > "$SANDBOX/.config/herdr/config.toml"   # no [theme]
+  printf '{\n  "permissions": {}\n}\n'  > "$SANDBOX/.claude/settings.json"        # no "theme"
+}
+toml_ok(){ python3 -c "import tomllib,sys; tomllib.loads(open(sys.argv[1]).read()); print('ok')" "$1" 2>&1 | tail -1; }
+fresh
+run light
+A="$SANDBOX/.config/alacritty"
+has "alacritty.toml imports the managed file"  'themes/custom/current.toml' "$A/alacritty.toml"
+eq  "alacritty.toml is still valid TOML"        "$(toml_ok "$A/alacritty.toml")" "ok"
+has "alacritty current.toml is the light theme" '#f2e9e1' "$A/themes/custom/current.toml"
+has "tmux.conf sources the managed file"        'source-file ~/.tmux/themes/current.conf' "$SANDBOX/.tmux.conf"
+has "tmux current.conf is the light theme"      '#f2e9e1' "$SANDBOX/.tmux/themes/current.conf"
+has "init.lua loads the switcher module"        'pcall(require, "prodev_theme")' "$SANDBOX/.config/nvim/init.lua"
+[[ -f "$SANDBOX/.config/nvim/lua/prodev_theme.lua" ]] && ok "prodev_theme.lua installed" || no "prodev_theme.lua installed" "absent"
+[[ -f "$SANDBOX/.config/nvim/lua/themes/rose-pine-dawn.lua" ]] && ok "base46 table installed" || no "base46 table installed" "absent"
+eq  "herdr got a [theme] table"                 "$(sed -n 's/^name = "\(.*\)"/\1/p' "$SANDBOX/.config/herdr/config.toml")" "rose-pine-dawn"
+eq  "herdr config is still valid TOML"          "$(toml_ok "$SANDBOX/.config/herdr/config.toml")" "ok"
+eq  "claude got a theme key"                    "$(plutil -extract theme raw "$SANDBOX/.claude/settings.json" 2>&1)" "custom:rose-pine-dawn"
+[[ -f "$SANDBOX/.claude/themes/rose-pine-dawn.json" ]] && ok "claude theme file installed" || no "claude theme file installed" "absent"
+# The markers must be comments in the host language: `#` is not one in Lua.
+has "init.lua block uses Lua comments" '-- >>> ProDev Theme Switcher managed >>>' "$SANDBOX/.config/nvim/init.lua"
+if command -v nvim >/dev/null; then
+  # A real Neovim loads the edited init.lua and our module; with no colorscheme
+  # plugin installed the module falls back to flipping `background`.
+  eq "a real nvim loaded it and flipped background" "$(cd "$SANDBOX" && HOME="$SANDBOX" XDG_CONFIG_HOME="$SANDBOX/.config" XDG_DATA_HOME="$SANDBOX/.local/share" XDG_STATE_HOME="$SANDBOX/.local/state" \
+      nvim --headless -u "$SANDBOX/.config/nvim/init.lua" -c 'lua io.write(vim.o.background)' -c 'qa!' 2>&1 | tail -1)" "light"
+else
+  ok "a real nvim loaded it (skipped: no nvim here)"
+fi
+fresh; rm "$SANDBOX/.config/nvim/init.lua"; printf 'set number\n' > "$SANDBOX/.config/nvim/init.vim"
+run light
+has "init.vim gets the vimscript form" '" >>> ProDev Theme Switcher managed >>>' "$SANDBOX/.config/nvim/init.vim"
+has "init.vim loads via :lua"          'lua pcall(require, "prodev_theme")'      "$SANDBOX/.config/nvim/init.vim"
+fresh; run light
+# The one assertion that would have caught this: a real tmux reading the real file.
+if command -v tmux >/dev/null; then
+  sock="$SANDBOX/tmux.sock"
+  HOME="$SANDBOX" tmux -S "$sock" -f "$SANDBOX/.tmux.conf" new-session -d 2>/dev/null
+  eq "a real tmux applied the theme" "$(tmux -S "$sock" show -gv status-style 2>&1)" "fg=#575279,bg=#dfdad9"
+  tmux -S "$sock" kill-server 2>/dev/null
+else
+  ok "a real tmux applied the theme (skipped: no tmux here)"
+fi
+
+run dark
+has "alacritty current.toml flipped to dark"    '#24283b' "$A/themes/custom/current.toml"
+has "tmux current.conf flipped to dark"         '#24283b' "$SANDBOX/.tmux/themes/current.conf"
+eq  "import line written once"                  "$(grep -c 'current.toml'   "$A/alacritty.toml")"          "1"
+eq  "source-file line written once"             "$(grep -c 'current.conf'   "$SANDBOX/.tmux.conf")"        "1"
+eq  "require line written once"                 "$(grep -c 'prodev_theme'   "$SANDBOX/.config/nvim/init.lua")" "1"
+eq  "one [theme] table"                         "$(grep -c '^\[theme\]'     "$SANDBOX/.config/herdr/config.toml")" "1"
+
+echo "== an existing import array is joined -- ours LAST, because later imports win =="
+last_import(){ python3 -c "
+import tomllib; d=tomllib.loads(open('$1').read()); i=d['general']['import']; print(len(i), i[-1].rsplit('/',1)[-1])"; }
+fresh
+printf '[general]\nimport = [\n  "~/.config/alacritty/mine.toml",\n]\n\n[font]\nsize = 13\n' > "$A/alacritty.toml"
+run light
+eq "multi-line, trailing comma: valid"  "$(toml_ok "$A/alacritty.toml")" "ok"
+eq "multi-line, trailing comma: last"   "$(last_import "$A/alacritty.toml" 2>&1)" "2 current.toml"
+fresh
+printf '[general]\nimport = [\n  "~/.config/alacritty/mine.toml"\n]\n' > "$A/alacritty.toml"
+run light
+eq "multi-line, no comma: valid"        "$(toml_ok "$A/alacritty.toml")" "ok"
+eq "multi-line, no comma: last"         "$(last_import "$A/alacritty.toml" 2>&1)" "2 current.toml"
+fresh
+printf '[general]\nimport = ["~/.config/alacritty/a.toml", "~/.config/alacritty/b.toml"]\n' > "$A/alacritty.toml"
+run light
+eq "one-line: valid"                    "$(toml_ok "$A/alacritty.toml")" "ok"
+eq "one-line: last"                     "$(last_import "$A/alacritty.toml" 2>&1)" "3 current.toml"
+fresh
+printf '[general]\nimport = []\n' > "$A/alacritty.toml"
+run light
+eq "empty array: last"                  "$(last_import "$A/alacritty.toml" 2>&1)" "1 current.toml"
+
+echo "== the user's own [colors] would beat any import, so they are moved out (backed up) =="
+fresh
+printf '[font]\nsize = 13\n\n[colors.primary]\nbackground = "#000000"\n\n[colors.normal]\nblack = "#111111"\n\n[window]\nopacity = 0.9\n' > "$A/alacritty.toml"
+run light
+eq "still valid TOML"        "$(toml_ok "$A/alacritty.toml")" "ok"
+eq "inline colors gone"      "$(grep -c '^\[colors' "$A/alacritty.toml")" "0"
+has "other tables kept"      'opacity = 0.9' "$A/alacritty.toml"
+has "…and backed up first"   'background = "#000000"' "$SANDBOX/.config/prodev-theme-switcher/backup/original/.config/alacritty/alacritty.toml"
+
+echo "== a ~/.alacritty.toml is edited, not shadowed by a new file =="
+fresh; rm "$A/alacritty.toml"; printf '[font]\nsize = 13\n' > "$SANDBOX/.alacritty.toml"
+run light
+has "import went to ~/.alacritty.toml" 'current.toml' "$SANDBOX/.alacritty.toml"
+[[ -e "$A/alacritty.toml" ]] && no "no shadowing alacritty.toml created" "created" || ok "no shadowing alacritty.toml created"
+
+echo "== Claude Code installed but never configured: settings.json is created, not skipped =="
+fresh; rm "$SANDBOX/.claude/settings.json"
+run light
+eq "theme key in a new settings.json" "$(plutil -extract theme raw "$SANDBOX/.claude/settings.json" 2>&1)" "custom:rose-pine-dawn"
+
+echo "== originals are backed up once, before the first edit, and --restore puts them back =="
+fresh
+run light; run dark
+B="$SANDBOX/.config/prodev-theme-switcher/backup/original"
+eq "alacritty.toml original" "$(cat "$B/.config/alacritty/alacritty.toml" 2>&1)" "$(printf '[font]\nsize = 13')"
+eq "tmux.conf original"      "$(cat "$B/.tmux.conf" 2>&1)"                      "set -g mouse on"
+eq "init.lua original"       "$(cat "$B/.config/nvim/init.lua" 2>&1)"           "vim.o.number = true"
+eq "herdr original"          "$(cat "$B/.config/herdr/config.toml" 2>&1)"       "$(printf '[ui]\nconfirm_close = true')"
+eq "claude original"         "$(cat "$B/.claude/settings.json" 2>&1)"           "$(printf '{\n  "permissions": {}\n}')"
+HOME="$SANDBOX" bash "$REPO/config/sync.sh" --restore >/dev/null 2>&1
+eq "restored alacritty.toml" "$(cat "$A/alacritty.toml")"                   "$(printf '[font]\nsize = 13')"
+eq "restored tmux.conf"      "$(cat "$SANDBOX/.tmux.conf")"                 "set -g mouse on"
+eq "restored init.lua"       "$(cat "$SANDBOX/.config/nvim/init.lua")"      "vim.o.number = true"
+eq "restored herdr"          "$(cat "$SANDBOX/.config/herdr/config.toml")"  "$(printf '[ui]\nconfirm_close = true')"
+eq "restored claude"         "$(cat "$SANDBOX/.claude/settings.json")"      "$(printf '{\n  "permissions": {}\n}')"
+# A file the app created from nothing has no original -- and must not be "restored" over.
+fresh; rm "$SANDBOX/.tmux.conf"
+run light
+[[ -e "$B/.tmux.conf" ]] && no "no phantom original for a created file" "backup exists" || ok "no phantom original for a created file"
+
+echo "== --install lays down what the app needs, from the repo or the bundle =="
+rm -rf "$SANDBOX"; mkdir -p "$SANDBOX"
+HOME="$SANDBOX" bash "$REPO/config/sync.sh" --install >/dev/null
+R="$SANDBOX/.config/prodev-theme-switcher"
+[[ -x "$R/sync.sh" ]]                         && ok "sync.sh installed"        || no "sync.sh installed" "absent"
+[[ -f "$R/themes/rose-pine-dawn/meta" ]]      && ok "themes installed"         || no "themes installed" "absent"
+[[ -f "$R/nvim/prodev_theme.lua" ]]           && ok "nvim module staged"       || no "nvim module staged" "absent"
+[[ -e "$SANDBOX/.claude" ]]                   && no "nothing invented for absent tools" ".claude created" || ok "nothing invented for absent tools"
+HOME="$SANDBOX" bash "$R/sync.sh" --install >/dev/null 2>&1
+eq "installed copy can re-run --install harmlessly" "$?" "0"
 
 echo "== every shipped theme is complete =="
 for d in "$REPO"/config/themes/*/; do

@@ -28,6 +28,21 @@ var installedTargets: Set<Target> { Detection.installed(home: Paths.home()) }
 
 let syncScript = Paths.root() + "/sync.sh"
 
+// A dragged-in .app has no ~/.config/prodev-theme-switcher yet. `make install`
+// creates it; the bundle carries the same files so everyone else gets it on first
+// launch. Only when missing: a later `make install-config` must not be undone by
+// an older bundle on the next launch.
+if !FileManager.default.fileExists(atPath: syncScript),
+   let bundled = Bundle.main.resourcePath.map({ $0 + "/config/sync.sh" }),
+   FileManager.default.fileExists(atPath: bundled) {
+    let p = Process()
+    p.executableURL = URL(fileURLWithPath: "/bin/bash")
+    p.arguments = [bundled, "--install"]
+    p.standardOutput = FileHandle.nullDevice
+    try? p.run()
+    p.waitUntilExit()
+}
+
 // MARK: - Auto appearance (sunrise/sunset)
 
 // macOS exposes no public API for the Auto appearance mode. System Settings drives it
@@ -151,20 +166,52 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.refreshIcon()
         }
 
-        // Register once, on first ever launch. Re-registering every launch would
-        // silently undo the user unticking "Launch at Login".
+        // Once, on first ever launch: consent before the first edit, then register
+        // for login. Re-registering every launch would silently undo the user
+        // unticking "Launch at Login". Quit leaves the flag unset, so the question
+        // is asked again next time rather than assumed.
         if !UserDefaults.standard.bool(forKey: "didFirstRun") {
+            NSApp.activate(ignoringOtherApps: true)
+            guard firstRunConsent() else { NSApp.terminate(nil); return }
             UserDefaults.standard.set(true, forKey: "didFirstRun")
             try? SMAppService.mainApp.register()
-            warnIfNothingToTheme()
         }
     }
 
-    /// Said once, on first launch only. With nothing but macOS installed the app
-    /// still works, but it is switching one thing -- and a menu bar icon that
-    /// appears to do almost nothing is worse than being told why.
+    /// The app edits files it does not own. Before the first one, the user sees
+    /// which, what is added, where the original goes, and gets a way out.
+    private func firstRunConsent() -> Bool {
+        let found = installedTargets
+        guard !Detection.onlyMacOS(found) else { warnIfNothingToTheme(); return true }
+        let edits: [Target: String] = [
+            .alacritty: "Alacritty\t~/.config/alacritty/alacritty.toml  — adds an import; moves your own [colors] out",
+            .tmux:      "tmux\t~/.tmux.conf  — adds a source-file line",
+            .nvim:      "Neovim\t~/.config/nvim/init.lua  — adds a require line",
+            .herdr:     "herdr\t~/.config/herdr/config.toml  — [theme], [ui] accent, [theme.custom]",
+            .claude:    "Claude Code\t~/.claude/settings.json  — \"theme\"",
+        ]
+        let a = NSAlert()
+        a.messageText = "ProDev Theme Switcher will edit these files"
+        a.informativeText = Target.allCases.compactMap { found.contains($0) ? edits[$0] : nil }
+            .joined(separator: "\n") + """
+
+
+            Each file is copied once, before its first edit, to \
+            ~/.config/prodev-theme-switcher/backup/original. To put everything back: \
+            bash ~/.config/prodev-theme-switcher/sync.sh --restore
+
+            Untick a tool in the menu to leave it alone.
+            """
+        a.alertStyle = .warning
+        a.addButton(withTitle: "Back up and continue")
+        a.addButton(withTitle: "Quit")
+        return a.runModal() == .alertFirstButtonReturn
+    }
+
+    /// With nothing but macOS installed the app still works, but it is switching
+    /// one thing -- and a menu bar icon that appears to do almost nothing is worse
+    /// than being told why.
     private func warnIfNothingToTheme() {
-        guard Detection.onlyMacOS(installedTargets) else { return }
         let a = NSAlert()
         a.messageText = "No supported apps found"
         a.informativeText = """

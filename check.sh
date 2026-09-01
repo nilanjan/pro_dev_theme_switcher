@@ -25,8 +25,15 @@ for m in dark light; do
   meta(){ sed -n "s/^$1=//p" "config/themes/$slug/meta" | head -1; }
   nv=$(meta nvim); hd=$(meta herdr); acc=$(meta accent)
   eq macOS     "$(defaults read -g AppleInterfaceStyle 2>/dev/null || echo Light)"    "$os"
-  eq alacritty "$(tr -d '[:space:]' < ~/.config/alacritty/theme.mode)"                "$m"
-  eq tmux      "$(tr -d '[:space:]' < ~/.tmux/theme.current)"                         "$m"
+  # Wiring, not just files: the theme is in the fixed file AND the user's own config
+  # points at it. A running tmux server, if any, must already be showing it.
+  eq alacritty "$(sed -n 's/^background = .\(#[0-9a-f]*\).*/\1/p' ~/.config/alacritty/themes/custom/current.toml | head -1)" "${cust#15:}"
+  eq "  wired"  "$(grep -c 'themes/custom/current.toml' ~/.config/alacritty/alacritty.toml ~/.alacritty.toml 2>/dev/null | awk -F: '{n+=$2} END {print n}')" "1"
+  eq tmux      "$(sed -n 's/^set -g status-style "\(.*\)"/\1/p' ~/.tmux/themes/current.conf)" "$(sed -n 's/^set -g status-style "\(.*\)"/\1/p' "config/themes/$slug/tmux.conf")"
+  eq "  wired"  "$(cat ~/.tmux.conf ~/.config/tmux/tmux.conf 2>/dev/null | grep -c 'source-file ~/.tmux/themes/current.conf')" "1"
+  if tmux ls >/dev/null 2>&1; then
+    eq "  live"   "$(tmux show -gv status-style)" "$(sed -n 's/^set -g status-style "\(.*\)"/\1/p' "config/themes/$slug/tmux.conf")"
+  fi
   eq nvim      "$(tr -d '[:space:]' < ~/.local/share/nvim/theme_state.txt)"           "$nv"
   eq zsh       "$(tr -d '[:space:]' < ~/.zsh_theme_mode)"                             "$m"
   # A real custom theme, not a built-in: see config/sync.sh for why.

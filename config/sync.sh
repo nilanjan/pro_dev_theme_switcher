@@ -6,10 +6,50 @@
 # needs to change. `meta` carries the per-target identifiers, because a slug does
 # not always match what a target calls the same theme (tokyo-night-storm is
 # `tokyonight-storm` to base46 and `tokyo-night` to herdr).
+#
+#   sync.sh [--quiet] [auto|light|dark]   apply a theme to every installed target
+#   sync.sh --install                      copy this directory into ~/.config/prodev-theme-switcher
+#   sync.sh --restore                      put every edited file back as it was before the first edit
+#
+# Each target is wired in, not just written next to: Alacritty gets an import,
+# tmux a source-file line, Neovim a require, herdr a [theme] table, Claude Code a
+# "theme" key. Each of those is added once, inside a marked block where the file
+# allows one, and the file is snapshotted first. That is what makes it work on a
+# machine that is not the author's -- the first release only wrote theme files to
+# paths the author's own dotfiles happened to read.
 set -euo pipefail
 
 ROOT="$HOME/.config/prodev-theme-switcher"
 THEMES="$ROOT/themes"
+BACKUP="$ROOT/backup/original"
+MARK_BEGIN="# >>> ProDev Theme Switcher managed >>>"
+MARK_END="# <<< ProDev Theme Switcher managed <<<"
+
+# --install: from wherever this copy lives (the repo's config/, or the .app's
+# Resources/config on first launch) into ROOT. Themes are replaced wholesale so a
+# removed theme does not linger; state, backups and prefs are left alone.
+if [[ "${1:-}" == "--install" ]]; then
+  src="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+  if [[ "$src" != "$(cd "$ROOT" 2>/dev/null && pwd -P)" ]]; then
+    mkdir -p "$ROOT"
+    rm -rf "$ROOT/themes" "$ROOT/nvim"
+    cp -R "$src/themes" "$src/nvim" "$ROOT/"
+    install -m 755 "$src/sync.sh" "$ROOT/sync.sh"
+  fi
+  echo "installed $(ls -1 "$ROOT/themes" | wc -l | tr -d ' ') themes to $ROOT/themes"
+  exit 0
+fi
+
+if [[ "${1:-}" == "--restore" ]]; then
+  [[ -d "$BACKUP" ]] || { echo "nothing backed up under $BACKUP"; exit 0; }
+  (cd "$BACKUP" && find . -type f) | while IFS= read -r f; do
+    f="${f#./}"
+    mkdir -p "$HOME/$(dirname "$f")"
+    cp -p "$BACKUP/$f" "$HOME/$f"
+    echo "restored ~/$f"
+  done
+  exit 0
+fi
 
 QUIET=0
 MODE="${1:-auto}"
@@ -58,6 +98,46 @@ selected_theme() {
 
 meta() { sed -n "s/^$2=//p" "$THEMES/$1/meta" | head -1; }
 
+# Snapshot a user-owned file once, before its first edit. Never overwritten, so it
+# stays the pre-install original however many switches follow. --restore puts it
+# back. A file that did not exist has no original, and gets none.
+backup() {
+  local f="$1" dst="$BACKUP/${1#"$HOME"/}"
+  [[ -f "$f" && ! -e "$dst" ]] || return 0
+  mkdir -p "$(dirname "$dst")"
+  cp -p "$f" "$dst"
+}
+
+# Append one line inside a marked block, once. Appending puts it after the user's
+# own settings, so it wins; the markers say what wrote it and how to take it out.
+# The comment leader is the file's own: `#` for TOML and tmux, `--` for Lua,
+# `"` for Vimscript -- a `#` in init.lua is a syntax error, not a comment.
+ensure_line() {  # file, line, comment-leader
+  grep -qF -- "$2" "$1" 2>/dev/null && return 0
+  backup "$1"
+  mkdir -p "$(dirname "$1")"
+  local c="${3:-#}"
+  printf '\n%s\n%s\n%s\n' "$c${MARK_BEGIN#\#}" "$2" "$c${MARK_END#\#}" >> "$1"
+}
+
+# Alacritty's own search order, so an existing ~/.alacritty.toml is edited rather
+# than shadowed by a new file higher up the list.
+alacritty_conf() {
+  local f
+  for f in "$HOME/.config/alacritty/alacritty.toml" "$HOME/.alacritty.toml"; do
+    [[ -f "$f" ]] && { echo "$f"; return; }
+  done
+  echo "$HOME/.config/alacritty/alacritty.toml"
+}
+
+tmux_conf() {
+  local f
+  for f in "$HOME/.tmux.conf" "$HOME/.config/tmux/tmux.conf"; do
+    [[ -f "$f" ]] && { echo "$f"; return; }
+  done
+  [[ -d "$HOME/.config/tmux" ]] && echo "$HOME/.config/tmux/tmux.conf" || echo "$HOME/.tmux.conf"
+}
+
 apply_mode() {
   local mode="$1"
   case "$mode" in dark|light) ;; *) echo "usage: $0 [--quiet] [auto|light|dark]" >&2; exit 1 ;; esac
@@ -73,23 +153,81 @@ apply_mode() {
   echo "$mode" > "$zsh_mode_file"
   echo "$mode" > "$mac_cache_file"
 
+  # Neovim reads the state file on FocusGained via a module the app installs, so a
+  # switch lands in running instances too. The base46 table is for NvChad configs.
   if ! skip nvim; then
     meta "$slug" nvim > "$nvim_state_file"
+    local ncfg="$HOME/.config/nvim"
+    if [[ -d "$ncfg" ]]; then
+      mkdir -p "$ncfg/lua/themes"
+      cp "$dir/nvim.lua" "$ncfg/lua/themes/$(meta "$slug" nvim).lua"
+      cp "$ROOT/nvim/prodev_theme.lua" "$ncfg/lua/prodev_theme.lua"
+      if [[ -f "$ncfg/init.vim" && ! -f "$ncfg/init.lua" ]]; then
+        ensure_line "$ncfg/init.vim" 'lua pcall(require, "prodev_theme")' '"'
+      else
+        ensure_line "$ncfg/init.lua" 'pcall(require, "prodev_theme")' '--'
+      fi
+    fi
   fi
 
-  # Alacritty and tmux keep switching on mode, so the selected theme's file is
-  # copied into the mode slot rather than teaching their switchers about slugs.
+  # Alacritty loads imports in order and the importing file last, so anything
+  # later wins. Ours therefore goes LAST in the import array, and the user's own
+  # [colors] tables in the main file -- which would beat any import -- are moved
+  # out (the file is backed up first). Alacritty watches imported files, so the
+  # switch is live. <mode>.toml is kept for configs that import per-mode files.
   if ! skip alacritty; then
+    local acfg; acfg="$(alacritty_conf)"
+    local apath='~/.config/alacritty/themes/custom/current.toml'
     mkdir -p "$HOME/.config/alacritty/themes/custom"
     cp "$dir/alacritty.toml" "$HOME/.config/alacritty/themes/custom/$mode.toml"
+    cp "$dir/alacritty.toml" "$HOME/.config/alacritty/themes/custom/current.toml"
+    if ! grep -qF -- "$apath" "$acfg" 2>/dev/null; then
+      backup "$acfg"
+      [[ -f "$acfg" ]] || : > "$acfg"
+      if grep -q '^\[colors' "$acfg"; then
+        awk '/^\[/ { skip = ($0 ~ /^\[colors/) } !skip' "$acfg" > "$acfg.tmp" && mv -f "$acfg.tmp" "$acfg"
+      fi
+      if grep -qE '^[[:space:]]*import[[:space:]]*=[[:space:]]*\[' "$acfg"; then
+        # append as the final element; handles one-line and multi-line arrays,
+        # with or without a trailing comma
+        awk -v p="$apath" '
+          !done && !inarr && /^[[:space:]]*import[[:space:]]*=[[:space:]]*\[/ { inarr = 1 }
+          inarr {
+            i = index($0, "]")
+            if (i) {
+              head = substr($0, 1, i - 1); tail = substr($0, i)
+              t = acc head; gsub(/[[:space:]]+$/, "", t)
+              sep = (t ~ /[\[,]$/) ? "" : ", "
+              print head sep "\"" p "\"" tail
+              inarr = 0; done = 1; next
+            }
+            acc = acc $0
+          }
+          { print }' "$acfg" > "$acfg.tmp" && mv -f "$acfg.tmp" "$acfg"
+      elif grep -q '^\[general\]' "$acfg"; then
+        /usr/bin/sed -i '' "/^\[general\]/a\\
+import = [\"$apath\"]
+" "$acfg"
+      else
+        # ponytail: [general].import is Alacritty >= 0.14 (2024). 0.13 wanted a
+        # top-level key, which has to precede every table; not worth the parser.
+        printf '\n%s\n[general]\nimport = ["%s"]\n%s\n' "$MARK_BEGIN" "$apath" "$MARK_END" >> "$acfg"
+      fi
+    fi
     [[ -x "$HOME/.config/alacritty/theme-switch.sh" ]] && \
       "$HOME/.config/alacritty/theme-switch.sh" --quiet "$mode"
   fi
+
+  # tmux: same shape -- fixed file, one source-file line appended to the user's
+  # conf so it comes after their own status settings. A running server is told now.
   if ! skip tmux; then
     mkdir -p "$HOME/.tmux/themes"
     cp "$dir/tmux.conf" "$HOME/.tmux/themes/$mode.conf"
+    cp "$dir/tmux.conf" "$HOME/.tmux/themes/current.conf"
+    ensure_line "$(tmux_conf)" 'source-file ~/.tmux/themes/current.conf'
     [[ -x "$HOME/.tmux/scripts/theme-switcher.sh" ]] && \
       "$HOME/.tmux/scripts/theme-switcher.sh" --quiet "$mode"
+    tmux source-file "$HOME/.tmux/themes/current.conf" >/dev/null 2>&1 || true
   fi
 
   # Claude Code resolves theme:"auto" ONCE at session start by querying the terminal
@@ -99,16 +237,39 @@ apply_mode() {
   # only reach the 16 terminal slots, which TUIs already own -- so each theme ships
   # a real custom theme in ~/.claude/themes, referenced as custom:<slug>.
   claude_cfg="$HOME/.claude/settings.json"
-  if ! skip claude && [[ -f "$claude_cfg" ]] && [[ -f "$dir/claude.json" ]]; then
-    /usr/bin/sed -i '' -E \
-      "s/(\"theme\"[[:space:]]*:[[:space:]]*)\"[^\"]*\"/\1\"custom:$slug\"/" "$claude_cfg"
+  if ! skip claude && [[ -d "$HOME/.claude" ]] && [[ -f "$dir/claude.json" ]]; then
+    mkdir -p "$HOME/.claude/themes"
+    cp "$dir/claude.json" "$HOME/.claude/themes/$slug.json"
+    backup "$claude_cfg"
+    if [[ ! -f "$claude_cfg" || -z "$(tr -d '[:space:]{}' < "$claude_cfg")" ]]; then
+      # a fresh install has no settings.json, or an empty one -- which plutil
+      # would misread as an OpenStep plist and refuse to write back
+      printf '{\n  "theme": "custom:%s"\n}\n' "$slug" > "$claude_cfg"
+    elif grep -qE '"theme"[[:space:]]*:' "$claude_cfg"; then
+      /usr/bin/sed -i '' -E \
+        "s/(\"theme\"[[:space:]]*:[[:space:]]*)\"[^\"]*\"/\1\"custom:$slug\"/" "$claude_cfg"
+    else
+      # plutil reads JSON as a plist and writes it back as JSON; -r keeps it readable
+      /usr/bin/plutil -replace theme -string "custom:$slug" -r "$claude_cfg"
+    fi
   fi
 
   herdr_cfg="$HOME/.config/herdr/config.toml"
-  herdr_bin="$HOME/.local/bin/herdr"
   if ! skip herdr && [[ -f "$herdr_cfg" ]]; then
-    /usr/bin/sed -i '' -E \
-      "/^\[theme\]/,/^\[/ s/^name = \".*\"/name = \"$(meta "$slug" herdr)\"/" "$herdr_cfg"
+    backup "$herdr_cfg"
+    local hname; hname="$(meta "$slug" herdr)"
+    # Our block comes off first so the [theme] range below cannot run into it.
+    /usr/bin/sed -i '' '/^# >>> ProDev Theme Switcher managed >>>/,/^# <<< ProDev Theme Switcher managed <<</d' "$herdr_cfg"
+    /usr/bin/sed -i '' '/^\[theme\.custom\]/,/^$/d' "$herdr_cfg"
+    if ! grep -q '^\[theme\]' "$herdr_cfg"; then
+      printf '\n[theme]\nname = "%s"\n' "$hname" >> "$herdr_cfg"
+    elif ! /usr/bin/sed -n '/^\[theme\]/,/^\[/p' "$herdr_cfg" | grep -q '^name[[:space:]]*='; then
+      /usr/bin/sed -i '' "/^\[theme\]/a\\
+name = \"$hname\"
+" "$herdr_cfg"
+    else
+      /usr/bin/sed -i '' -E "/^\[theme\]/,/^\[/ s/^name[[:space:]]*=.*/name = \"$hname\"/" "$herdr_cfg"
+    fi
 
     # [ui] accent fills the selected-tab chip and the agent dots. herdr paints the
     # chip label with surface_dim -- the same token as the selected sidebar row --
@@ -128,14 +289,13 @@ accent = \"$accent\"
     # rewritten wholesale on every switch -- never left behind to repaint the other
     # theme. herdr ships no Tokyo Night *Storm* and its rose-pine-dawn sits 4% off
     # pure white, so both need the overlay.
-    /usr/bin/sed -i '' '/^# >>> ProDev Theme Switcher managed >>>/,/^# <<< ProDev Theme Switcher managed <<</d' "$herdr_cfg"
-    /usr/bin/sed -i '' '/^\[theme\.custom\]/,/^$/d' "$herdr_cfg"
     {
-      echo "# >>> ProDev Theme Switcher managed >>>"
+      echo "$MARK_BEGIN"
       echo "# $slug -- generated, edit themes/$slug/herdr.toml instead"
       cat "$dir/herdr.toml"
-      echo "# <<< ProDev Theme Switcher managed <<<"
+      echo "$MARK_END"
     } >> "$herdr_cfg"
+    local herdr_bin; herdr_bin="$(command -v herdr 2>/dev/null || echo "$HOME/.local/bin/herdr")"
     [[ -x "$herdr_bin" ]] && "$herdr_bin" server reload-config >/dev/null 2>&1 || true
   fi
 

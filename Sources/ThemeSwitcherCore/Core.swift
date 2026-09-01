@@ -106,7 +106,7 @@ public enum Target: String, CaseIterable, Sendable {
         case .nvim:      return ["\(home)/.config/nvim"]
         case .tmux:      return ["\(home)/.tmux", "\(home)/.config/tmux", "\(home)/.tmux.conf"]
         case .herdr:     return ["\(home)/.config/herdr/config.toml"]
-        case .claude:    return ["\(home)/.claude/settings.json"]
+        case .claude:    return ["\(home)/.claude"]
         }
     }
 

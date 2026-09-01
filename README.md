@@ -54,7 +54,33 @@ make install
 ```
 
 Builds, signs, installs the themes, and launches. The icon appears in your menu bar.
-Command Line Tools are enough — no full Xcode.
+Command Line Tools are enough — no full Xcode. A `make dmg` build works the same way:
+drag it to Applications and the app lays down its own themes on first launch.
+
+**Before it edits anything** it shows you what it is about to touch, and why:
+
+```
+ProDev Theme Switcher will edit these files
+
+Alacritty     ~/.config/alacritty/alacritty.toml  — adds an import; moves your own [colors] out
+tmux          ~/.tmux.conf                        — adds a source-file line
+Neovim        ~/.config/nvim/init.lua             — adds a require line
+herdr         ~/.config/herdr/config.toml         — [theme], [ui] accent, [theme.custom]
+Claude Code   ~/.claude/settings.json             — "theme"
+
+Each file is copied once, before its first edit, to
+~/.config/prodev-theme-switcher/backup/original.
+
+                                   [ Quit ]  [ Back up and continue ]
+```
+
+Only the tools it actually found are listed. **Quit** leaves every file untouched and
+asks again next launch. The backup is taken once and never overwritten, so it stays
+the pre-install original however many switches follow. To put everything back:
+
+```sh
+bash ~/.config/prodev-theme-switcher/sync.sh --restore
+```
 
 **On first launch** macOS blocks it, because it is not notarized. Open
 **System Settings → Privacy & Security**, find the message about *ProDev Theme
@@ -156,8 +182,10 @@ breaks instead of letting it through.
 make uninstall
 ```
 
-Removes the app, `~/.config/prodev-theme-switcher`, and the preferences domain.
-Files written into other tools' configs stay put — restore your own backups.
+Removes the app, its themes and the preferences domain. The edits it made to other
+tools' configs stay, and so does `~/.config/prodev-theme-switcher/backup/original`.
+Restoring is your call, not a side effect — `make uninstall` prints the one-line
+`cp` that does it.
 
 ---
 
@@ -168,14 +196,20 @@ macOS appearance is the single source of truth. The app flips it, reacts to
 `~/.config/prodev-theme-switcher/sync.sh` for the theme selected for that mode. So
 switching from Control Center or the sunset schedule works too.
 
+Each target is *wired in*, not just written next to. The theme goes to a fixed file
+the app owns; the user's own config gets one line pointing at it, added once, inside
+a marked block, after their own settings so it wins. That is the difference between
+this and the first release, which wrote theme files to paths that only the author's
+dotfiles happened to read — and did nothing on anyone else's Mac.
+
 | Target | Mechanism |
 |---|---|
 | macOS | AppleScript → System Events |
-| Alacritty | theme file copied into the mode slot, `live_config_reload` |
-| tmux | theme file copied into the mode slot, `source-file` |
-| Neovim | base46 user theme + state file, `FocusGained` reload |
-| herdr | `config.toml` rewrite + `server reload-config` |
-| Claude Code | `~/.claude/themes/<slug>.json` + settings `theme: custom:<slug>` |
+| Alacritty | `themes/custom/current.toml`, imported **last** from `alacritty.toml` — later imports win, and the importing file wins over all of them, so any `[colors]` tables in the main file are moved out (backed up). Live via `live_config_reload`. Needs Alacritty ≥ 0.14 |
+| tmux | `~/.tmux/themes/current.conf`, `source-file`d from the end of your tmux conf; a running server is told at once |
+| Neovim | state file + `lua/prodev_theme.lua`, required from the end of `init.lua`; applies the colorscheme if its plugin is installed ([tokyonight.nvim](https://github.com/folke/tokyonight.nvim), [rose-pine/neovim](https://github.com/rose-pine/neovim)), else flips `background`; re-checked on `FocusGained`. The base46 table is also installed for NvChad |
+| herdr | `[theme] name` (table created if absent), `[ui] accent`, managed `[theme.custom]` block + `server reload-config` |
+| Claude Code | `~/.claude/themes/<slug>.json` + `settings.json` `theme: custom:<slug>` — key added, or the file created, if missing |
 | VS Code | native `window.autoDetectColorScheme` — untouched |
 
 `sync.sh` takes a `mkdir` mutex: the app invokes it directly *and* from its
@@ -209,7 +243,7 @@ until the label clears 4.5:1.
 | Command | Covers |
 |---|---|
 | `swift run core-tests` | 126 checks over `ThemeSwitcherCore` — **100% of lines and functions** |
-| `./tests/sync_test.sh` | `sync.sh` against a throwaway `HOME`: slug resolution, opt-out, unknown-theme fallback, and that the managed herdr block never accumulates |
+| `./tests/sync_test.sh` | `sync.sh` against a throwaway `HOME` shaped like a **fresh Mac** — bare configs, none of the author's dotfile hooks: every target gets wired in exactly once, originals are backed up and `--restore` puts them back, a real `tmux` started on the edited conf shows the theme; plus slug resolution, opt-out, fallback, the herdr block never accumulating |
 | `python3 tests/palette_gate.py` | contrast and surface rules for every shipped theme |
 | `python3 tests/theme_json_test.py` | Claude Code themes parse and are complete — its loader drops malformed overrides silently |
 | `./check.sh` | the live machine, end to end; restores the appearance it found |
@@ -242,10 +276,12 @@ make uninstall
 > framework, because macOS exposes no public API for that setting. Apple may break
 > it in any update. Light and Dark use only public APIs.
 >
-> **It overwrites other apps' config files** — on every switch. Edits to
-> `herdr/config.toml` and `~/.claude/settings.json` are in-place `sed` and
-> **cannot be undone**. **Back those up first.** Hand-edits inside the regions it
-> manages will be lost.
+> **It edits other apps' config files.** Once, with your consent, it adds a line to
+> `alacritty.toml` (and moves your own `[colors]` out), `.tmux.conf`, `init.lua`,
+> `herdr/config.toml` and `~/.claude/settings.json`; then on every switch it rewrites
+> the regions it manages. **Each file is backed up before its first edit** to
+> `~/.config/prodev-theme-switcher/backup/original`, and `sync.sh --restore` puts them
+> back. Hand-edits inside the managed regions are lost on the next switch.
 >
 > **Not affiliated with** Apple, Anthropic, Alacritty, tmux, Neovim, herdr,
 > Microsoft or GitHub. Bundled palettes are **modified** adaptations — see

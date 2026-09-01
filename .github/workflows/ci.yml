@@ -44,6 +44,13 @@ jobs:
           echo "line coverage: $PCT%"
           awk -v p="$PCT" 'BEGIN { if (p+0 < 100) { print "::error::line coverage " p "% < 100%"; exit 1 } }'
 
+      # Two targets are cheap enough to run for real: the sync tests start a tmux
+      # server on the sandbox conf and read the style back, and load the edited
+      # init.lua in a headless Neovim. Those are the checks that would have caught
+      # the first release writing files nothing read.
+      - name: tmux and Neovim, for the real-consumer checks
+        run: brew install tmux neovim
+
       - name: Sync script tests
         run: ./tests/sync_test.sh
 
@@ -66,13 +73,18 @@ jobs:
           # Scratch HOME so the runner's own config is untouched. macos is skipped:
           # flipping the system appearance needs a window server.
           export HOME="$RUNNER_TEMP/smoke"
+          export TMUX_TMPDIR="$HOME"
           rm -rf "$HOME"
-          # A target counts as installed only if its config is present -- so the
-          # fixture has to look like a machine that actually has these tools.
-          mkdir -p "$HOME/.claude" "$HOME/.config/herdr" "$HOME/.config/alacritty" "$HOME/.tmux"
-          printf '{\n  "theme": "auto"\n}\n' > "$HOME/.claude/settings.json"
-          printf '[theme]\nname = "placeholder"\n\n[ui]\n' > "$HOME/.config/herdr/config.toml"
-          make install-config
+          # A fresh machine that has the tools: bare configs, none of the hooks the
+          # author's dotfiles happen to have, no [theme] table, no "theme" key.
+          # Nothing is pre-installed under HOME either -- the bundle has to lay down
+          # its own sync.sh and themes on first run.
+          mkdir -p "$HOME/.claude" "$HOME/.config/herdr" "$HOME/.config/alacritty" "$HOME/.config/nvim"
+          printf '{\n  "permissions": {}\n}\n'  > "$HOME/.claude/settings.json"
+          printf '[ui]\nconfirm_close = true\n' > "$HOME/.config/herdr/config.toml"
+          printf '[font]\nsize = 13\n'          > "$HOME/.config/alacritty/alacritty.toml"
+          printf 'set -g mouse on\n'            > "$HOME/.tmux.conf"
+          printf 'vim.o.number = true\n'        > "$HOME/.config/nvim/init.lua"
 
           fail=0
           check() {  # name, pattern, file
@@ -92,24 +104,41 @@ jobs:
             echo "== --set $mode =="
             PDTS_SKIP=macos "$BIN" --set "$mode"
             echo "  exit=$?"
-            [ "$mode" = light ] && slug=rose-pine-dawn nv=rose-pine-dawn \
-                                || slug=tokyo-night-storm nv=tokyonight-storm
-            check "claude theme"  "custom:$slug" "$HOME/.claude/settings.json"
-            check "nvim state"    "$nv"          "$HOME/.local/share/nvim/theme_state.txt"
-            check "zsh mode"      "$mode"        "$HOME/.zsh_theme_mode"
-            check "herdr theme"   "$slug"        "$HOME/.config/herdr/config.toml"
-            check "alacritty"     "colors"       "$HOME/.config/alacritty/themes/custom/$mode.toml"
-            check "tmux"          "status"       "$HOME/.tmux/themes/$mode.conf"
+            [ "$mode" = light ] && slug=rose-pine-dawn nv=rose-pine-dawn bg='#f2e9e1' \
+                                || slug=tokyo-night-storm nv=tokyonight-storm bg='#24283b'
+            check "self-installed"  "apply_mode"    "$HOME/.config/prodev-theme-switcher/sync.sh"
+            check "claude theme"    "custom:$slug"  "$HOME/.claude/settings.json"
+            check "claude file"     "overrides"     "$HOME/.claude/themes/$slug.json"
+            check "nvim state"      "$nv"           "$HOME/.local/share/nvim/theme_state.txt"
+            check "nvim wired"      "prodev_theme"  "$HOME/.config/nvim/init.lua"
+            check "nvim module"     "colorscheme"   "$HOME/.config/nvim/lua/prodev_theme.lua"
+            check "zsh mode"        "$mode"         "$HOME/.zsh_theme_mode"
+            check "herdr theme"     "$slug"         "$HOME/.config/herdr/config.toml"
+            check "herdr [theme]"   '^\[theme\]'    "$HOME/.config/herdr/config.toml"
+            check "alacritty wired" "current.toml"  "$HOME/.config/alacritty/alacritty.toml"
+            check "alacritty theme" "$bg"           "$HOME/.config/alacritty/themes/custom/current.toml"
+            check "tmux wired"      "current.conf"  "$HOME/.tmux.conf"
+            check "tmux theme"      "$bg"           "$HOME/.tmux/themes/current.conf"
+            check "backup taken"    "size = 13"     "$HOME/.config/prodev-theme-switcher/backup/original/.config/alacritty/alacritty.toml"
           done
+
+          # A real tmux, started on the edited conf, must be showing the dark theme.
+          # (short socket path: unix sockets cap out around 100 characters)
+          sock=$(mktemp -u /tmp/pdts-tmux.XXXXXX)
+          tmux -S "$sock" -f "$HOME/.tmux.conf" new-session -d
+          style=$(tmux -S "$sock" show -gv status-style)
+          tmux -S "$sock" kill-server
+          if [ "$style" = "fg=#c0caf5,bg=#24283b" ]; then echo "  ok  a real tmux applied the theme"
+          else echo "::error::tmux status-style is '$style'"; fail=1; fi
 
           # And the other half of the contract: a tool that is NOT installed must be
           # left entirely alone, not have config invented for it.
           echo "== uninstalled tools are skipped =="
           export HOME="$RUNNER_TEMP/bare"
           rm -rf "$HOME"; mkdir -p "$HOME"
-          make install-config >/dev/null
           "$BIN" --set light
-          if [ -e "$HOME/.config/herdr" ] || [ -e "$HOME/.claude/settings.json" ]; then
+          if [ -e "$HOME/.config/herdr" ] || [ -e "$HOME/.claude" ] || [ -e "$HOME/.tmux.conf" ] \
+             || [ -e "$HOME/.config/alacritty" ] || [ -e "$HOME/.config/nvim" ]; then
             echo "::error::wrote config for a tool that is not installed"
             find "$HOME" -type f | head -20
             fail=1
