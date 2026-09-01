@@ -1,4 +1,12 @@
-# ProDev Theme Switcher
+<div align="center">
+  <img src="Resources/logo.svg" alt="" width="112" height="112">
+</div>
+
+<h1 align="center">ProDev Theme Switcher</h1>
+
+<p align="center">
+  <em>An iris: the instrument that decides how much light gets through.</em>
+</p>
 
 [![CI](https://github.com/nilanjan/pro_dev_theme_switcher/actions/workflows/ci.yml/badge.svg)](https://github.com/nilanjan/pro_dev_theme_switcher/actions/workflows/ci.yml)
 [![Platform](https://img.shields.io/badge/platform-macOS%2014%2B-lightgrey)](#requirements)
@@ -10,6 +18,13 @@ multiplexer, editor and Claude Code — between a light and a dark theme in one 
 
 Ships with **Tokyo Night Storm** (dark) and **Rosé Pine Dawn** (light). Themes are
 directories on disk, so adding more needs no rebuild.
+
+<sub>The mark is built on the one hue both shipped palettes share — the Rosé Pine
+spec calls it <code>iris</code>, <code>#907aa9</code>. Six blades, seams raked
+0.62&nbsp;rad off-radius so it reads as rotating rather than as a star.
+<code>tools/mkicon.swift</code> regenerates the <code>.icns</code> from that same
+geometry, so the icon can never drift from
+<a href="Resources/logo.svg"><code>logo.svg</code></a>.</sub>
 
 ---
 

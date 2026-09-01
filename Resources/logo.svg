@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512"
+     role="img" aria-label="ProDev Theme Switcher">
+  <title>ProDev Theme Switcher</title>
+  <!--
+    An iris: the instrument that decides how much light gets through.
+
+    The name is not a metaphor chosen afterwards. Rosé Pine and Tokyo Night Storm
+    share exactly one hue, and the Rosé Pine spec calls it `iris` — #907aa9. It is
+    already the accent this app uses everywhere else, and it already had the right
+    name on it.
+
+    Geometry, because tools/mkicon.swift reproduces this exactly and the .icns must
+    not drift from the SVG: 6 blades, outer radius 152, opening 58,
+    seams raked 0.62 rad off-radius. That rake is the whole mark — seams that point
+    at the centre read as a star, seams that miss it read as rotation. Protect it.
+
+    Flat fills and one seam weight, no gradient or shadow: it has to survive being
+    16 px tall in a menu bar.
+  -->
+  <defs>
+    <clipPath id="tile">
+      <rect x="32" y="32" width="448" height="448" rx="116" ry="116"/>
+    </clipPath>
+  </defs>
+  <g clip-path="url(#tile)">
+    <rect x="32" y="32" width="448" height="448" fill="#24283b"/>
+    <circle cx="256" cy="256" r="152" fill="#907aa9"/>
+    <polygon points="256.0,198.0 306.2,227.0 306.2,285.0 256.0,314.0 205.8,285.0 205.8,227.0" fill="#f2e9e1"/>
+    <g stroke="#24283b" stroke-width="17" stroke-linecap="round">
+    <line x1="256.0" y1="198.0" x2="344.3" y2="132.3"/>
+    <line x1="306.2" y1="227.0" x2="407.3" y2="270.6"/>
+    <line x1="306.2" y1="285.0" x2="319.0" y2="394.3"/>
+    <line x1="256.0" y1="314.0" x2="167.7" y2="379.7"/>
+    <line x1="205.8" y1="285.0" x2="104.7" y2="241.4"/>
+    <line x1="205.8" y1="227.0" x2="193.0" y2="117.7"/>
+    </g>
+  </g>
+</svg>
