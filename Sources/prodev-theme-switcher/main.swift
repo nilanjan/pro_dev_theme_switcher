@@ -22,7 +22,7 @@ let prefs = Selection(store: UserDefaults.standard,
                       environment: ProcessInfo.processInfo.environment)
 var installedThemes: [Theme] { Theme.load(root: Theme.defaultRoot) }
 
-let syncScript = NSHomeDirectory() + "/.config/prodev-theme-switcher/sync.sh"
+let syncScript = Paths.root() + "/sync.sh"
 
 // MARK: - Auto appearance (sunrise/sunset)
 
@@ -80,7 +80,7 @@ func applyToApps(_ m: Mode) {
     var env = ProcessInfo.processInfo.environment
     // A GUI app does not inherit the login shell PATH; the script calls tmux/herdr bare.
     env["PATH"] = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:"
-                + NSHomeDirectory() + "/.local/bin"
+                + Paths.home() + "/.local/bin"
     for (k, v) in prefs.environment() { env[k] = v }
 
     let p = Process()

@@ -55,28 +55,54 @@ jobs:
       # rewrites the target configs -- not that anything is drawn.
       - name: Smoke test
         run: |
-          set -euo pipefail
+          set -uo pipefail
           make app
-          BIN="dist/ProDev Theme Switcher.app/Contents/MacOS/prodev-theme-switcher"
-          test -x "$BIN"
+          BIN="$GITHUB_WORKSPACE/dist/ProDev Theme Switcher.app/Contents/MacOS/prodev-theme-switcher"
+          test -x "$BIN" || { echo "::error::binary missing"; exit 1; }
           /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' \
             "dist/ProDev Theme Switcher.app/Contents/Info.plist"
           codesign --verify --verbose "dist/ProDev Theme Switcher.app"
 
-          # Install into a scratch HOME so the runner's own config is untouched, and
-          # skip macos: flipping the system appearance needs a window server.
+          # Scratch HOME so the runner's own config is untouched. macos is skipped:
+          # flipping the system appearance needs a window server.
           export HOME="$RUNNER_TEMP/smoke"
-          mkdir -p "$HOME/.claude" "$HOME/.config/herdr"
+          rm -rf "$HOME"; mkdir -p "$HOME/.claude" "$HOME/.config/herdr"
           printf '{\n  "theme": "auto"\n}\n' > "$HOME/.claude/settings.json"
           printf '[theme]\nname = "placeholder"\n\n[ui]\n' > "$HOME/.config/herdr/config.toml"
           make install-config
 
-          PDTS_SKIP=macos "$GITHUB_WORKSPACE/$BIN" --set light
-          grep -q 'custom:rose-pine-dawn' "$HOME/.claude/settings.json"
-          grep -q 'rose-pine-dawn' "$HOME/.local/share/nvim/theme_state.txt"
-          PDTS_SKIP=macos "$GITHUB_WORKSPACE/$BIN" --set dark
-          grep -q 'custom:tokyo-night-storm' "$HOME/.claude/settings.json"
-          grep -q 'tokyonight-storm' "$HOME/.local/share/nvim/theme_state.txt"
+          fail=0
+          check() {  # name, pattern, file
+            if [ ! -f "$3" ]; then
+              echo "::error::$1 -- $3 was never written"; fail=1; return
+            fi
+            if grep -q "$2" "$3"; then
+              echo "  ok  $1"
+            else
+              echo "::error::$1 -- $3 does not contain '$2'"
+              echo "        actual: $(head -c 300 "$3" | tr '\n' ' ')"
+              fail=1
+            fi
+          }
+
+          for mode in light dark; do
+            echo "== --set $mode =="
+            PDTS_SKIP=macos "$BIN" --set "$mode"
+            echo "  exit=$?"
+            [ "$mode" = light ] && slug=rose-pine-dawn nv=rose-pine-dawn \
+                                || slug=tokyo-night-storm nv=tokyonight-storm
+            check "claude theme"  "custom:$slug" "$HOME/.claude/settings.json"
+            check "nvim state"    "$nv"          "$HOME/.local/share/nvim/theme_state.txt"
+            check "zsh mode"      "$mode"        "$HOME/.zsh_theme_mode"
+            check "herdr theme"   "$slug"        "$HOME/.config/herdr/config.toml"
+            check "alacritty"     "colors"       "$HOME/.config/alacritty/themes/custom/$mode.toml"
+          done
+
+          if [ "$fail" -ne 0 ]; then
+            echo "--- scratch HOME contents, for diagnosis ---"
+            find "$HOME" -type f | head -40
+            exit 1
+          fi
           echo "smoke: light and dark both applied"
 
       - name: Theme JSON is valid and complete

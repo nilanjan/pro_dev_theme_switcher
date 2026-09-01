@@ -221,4 +221,14 @@ T.suite("UserDefaults conformance") {
     T.ok(!sel.isEnabled(.tmux), "selection sees the skip")
 }
 
+T.suite("Paths") {
+    T.eq(Paths.home(["HOME": "/tmp/scratch"], fallback: "/real"), "/tmp/scratch", "HOME wins")
+    T.eq(Paths.home([:], fallback: "/real"), "/real", "falls back when unset")
+    // An empty HOME is not a home; treating it as one yields paths rooted at "/".
+    T.eq(Paths.home(["HOME": ""], fallback: "/real"), "/real", "empty HOME falls back")
+    T.eq(Paths.root(["HOME": "/tmp/scratch"], fallback: "/real"),
+         "/tmp/scratch/.config/prodev-theme-switcher", "root hangs off home")
+    T.ok(Theme.defaultRoot.hasSuffix("/.config/prodev-theme-switcher/themes"), "themes dir")
+}
+
 T.report()

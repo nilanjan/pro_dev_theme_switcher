@@ -72,9 +72,7 @@ public struct Theme: Equatable, Sendable {
     }
 
     /// Where `make install-config` puts them.
-    public static var defaultRoot: String {
-        NSHomeDirectory() + "/.config/prodev-theme-switcher/themes"
-    }
+    public static var defaultRoot: String { Paths.root() + "/themes" }
 
     public static func forMode(_ mode: Mode, in themes: [Theme]) -> [Theme] {
         themes.filter { $0.mode == mode }
@@ -112,6 +110,23 @@ public enum Target: String, CaseIterable, Sendable {
     /// stable across runs rather than reflecting Set iteration order.
     public static func skipList(disabled: Set<Target>) -> String {
         allCases.filter { disabled.contains($0) }.map(\.rawValue).joined(separator: ",")
+    }
+}
+
+/// Where the app keeps sync.sh and the themes.
+///
+/// Resolved from HOME rather than NSHomeDirectory(), which consults the password
+/// database and so can ignore an overridden HOME -- that makes the app untestable
+/// against a scratch home, which is exactly what CI needs to do.
+public enum Paths {
+    public static func home(_ environment: [String: String] = ProcessInfo.processInfo.environment,
+                            fallback: String = NSHomeDirectory()) -> String {
+        let h = environment["HOME"] ?? ""
+        return h.isEmpty ? fallback : h
+    }
+    public static func root(_ environment: [String: String] = ProcessInfo.processInfo.environment,
+                            fallback: String = NSHomeDirectory()) -> String {
+        home(environment, fallback: fallback) + "/.config/prodev-theme-switcher"
     }
 }
 
