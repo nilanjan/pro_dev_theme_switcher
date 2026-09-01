@@ -66,7 +66,10 @@ jobs:
           # Scratch HOME so the runner's own config is untouched. macos is skipped:
           # flipping the system appearance needs a window server.
           export HOME="$RUNNER_TEMP/smoke"
-          rm -rf "$HOME"; mkdir -p "$HOME/.claude" "$HOME/.config/herdr"
+          rm -rf "$HOME"
+          # A target counts as installed only if its config is present -- so the
+          # fixture has to look like a machine that actually has these tools.
+          mkdir -p "$HOME/.claude" "$HOME/.config/herdr" "$HOME/.config/alacritty" "$HOME/.tmux"
           printf '{\n  "theme": "auto"\n}\n' > "$HOME/.claude/settings.json"
           printf '[theme]\nname = "placeholder"\n\n[ui]\n' > "$HOME/.config/herdr/config.toml"
           make install-config
@@ -96,7 +99,23 @@ jobs:
             check "zsh mode"      "$mode"        "$HOME/.zsh_theme_mode"
             check "herdr theme"   "$slug"        "$HOME/.config/herdr/config.toml"
             check "alacritty"     "colors"       "$HOME/.config/alacritty/themes/custom/$mode.toml"
+            check "tmux"          "status"       "$HOME/.tmux/themes/$mode.conf"
           done
+
+          # And the other half of the contract: a tool that is NOT installed must be
+          # left entirely alone, not have config invented for it.
+          echo "== uninstalled tools are skipped =="
+          export HOME="$RUNNER_TEMP/bare"
+          rm -rf "$HOME"; mkdir -p "$HOME"
+          make install-config >/dev/null
+          "$BIN" --set light
+          if [ -e "$HOME/.config/herdr" ] || [ -e "$HOME/.claude/settings.json" ]; then
+            echo "::error::wrote config for a tool that is not installed"
+            find "$HOME" -type f | head -20
+            fail=1
+          else
+            echo "  ok  no config invented for absent tools"
+          fi
 
           if [ "$fail" -ne 0 ]; then
             echo "--- scratch HOME contents, for diagnosis ---"
