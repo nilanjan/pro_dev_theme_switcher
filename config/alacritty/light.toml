@@ -1,0 +1,11 @@
+[general]
+import = [ "~/.config/alacritty/themes/themes/rose-pine-dawn.toml" ]
+
+# The upstream Dawn port maps ANSI black to #f2e9e1 (overlay) -- 1.10:1 against the
+# #faf4ed background, i.e. invisible. TUIs draw bullets, box-drawing and dim text
+# with ANSI 0, so those glyphs disappear. Raised to Dawn's own subtle/muted greys.
+[colors.normal]
+black = '#797593'
+
+[colors.bright]
+black = '#9893a5'

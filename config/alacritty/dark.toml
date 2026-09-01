@@ -1,0 +1,12 @@
+[general]
+import = [ "~/.config/alacritty/themes/themes/tokyo-night-storm.toml" ]
+
+# The upstream Storm port sets ANSI black to #32344a, which is only 1.20:1 against
+# the #24283b background -- effectively invisible. TUIs (Claude Code, herdr, fzf)
+# draw bullets, box-drawing and dim text with ANSI 0, so those glyphs vanish.
+# Raised to Storm's own comment/dark5 greys: canonical palette, actually legible.
+[colors.normal]
+black = '#565f89'
+
+[colors.bright]
+black = '#737aa2'
