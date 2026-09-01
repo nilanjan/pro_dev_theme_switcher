@@ -248,15 +248,59 @@ make uninstall
 > manages will be lost.
 >
 > **Not affiliated with** Apple, Anthropic, Alacritty, tmux, Neovim, herdr,
-> Microsoft or GitHub. Bundled palettes are **modified** adaptations of
-> [Tokyo Night](https://github.com/folke/tokyonight.nvim) and
-> [Rosé Pine](https://rosepinetheme.com) — don't report issues with them upstream.
+> Microsoft or GitHub. Bundled palettes are **modified** adaptations — see
+> [Credits](#credits) for full attribution and exactly what was changed.
 >
 > **The contrast gate is a signal, not a conformance claim.** Passing it does not
 > mean any theme meets WCAG or any other accessibility standard.
 >
 > **Full terms: [DISCLAIMER.md](DISCLAIMER.md).**
 
+## Credits
+
+The two bundled themes are **adaptations** of other people's work, used with thanks
+under their own licenses. The palettes below are modified — please judge these
+changes on their own and don't report issues with them upstream.
+
+### Tokyo Night — Storm
+
+By **Folke Lemaitre** and contributors · [folke/tokyonight.nvim](https://github.com/folke/tokyonight.nvim) · MIT
+
+Canonical Storm palette, with one change: ANSI 0 is `#565f89` (Storm's own
+`comment`) instead of `#32344a`, and ANSI 8 is `#737aa2` (`dark5`). Upstream's ANSI 0
+sits at 1.20:1 against the background, so box-drawing and bullets are invisible in
+TUIs that use it. Every other value is untouched.
+
+### Rosé Pine — Dawn
+
+By the **Rosé Pine** team · [rose-pine/rose-pine-theme](https://github.com/rose-pine/rose-pine-theme) · [rosepinetheme.com](https://rosepinetheme.com) · MIT
+
+Canonical Dawn hues, reassigned by role:
+
+| Change | From | To | Why |
+|---|---|---|---|
+| Canvas | `base` `#faf4ed` | `overlay` `#f2e9e1` | `base` is 4% off pure white; surfaces had no room to separate |
+| Surfaces | ascending | descending | A light theme separates by darkening, not lightening |
+| gold | `#ea9d34` | `#bf7614` | 1.87:1 as text — walked down in HLS lightness, hue kept |
+| rose | `#d7827e` | `#cf6864` | 2.37:1 as text |
+| foam | `#56949f` | `#53909a` | 2.86:1 as text |
+| ANSI 0 | `#f2e9e1` | `#797593` | 1.10:1 — invisible |
+| ANSI 7/15 | text | surfaces | In a light theme these carry the light end of the ramp |
+
+`love` `#b4637a`, `pine` `#286983` and `iris` `#907aa9` already cleared 3:1 and are
+unchanged.
+
+### Also used
+
+- **[alacritty/alacritty-theme](https://github.com/alacritty/alacritty-theme)** (Apache-2.0) — the upstream Alacritty ports both palettes were merged from.
+- **[NvChad/base46](https://github.com/NvChad/base46)**, building on **nvim-base16** by **Ashkan Kiani** (MIT) — the Neovim theme-table format `nvim.lua` targets.
+- **[herdr](https://herdr.dev)** and **[Claude Code](https://claude.com/claude-code)** — theme formats written against, neither affiliated with nor endorsing this project.
+
+All product names and trademarks belong to their respective owners and are used only
+to describe interoperability.
+
 ## License
 
-MIT — see [LICENSE](LICENSE).
+This project's own code is MIT — see [LICENSE](LICENSE). That covers the app, the
+build and the tests; it grants no rights in any third-party trademark, and the
+bundled palettes remain subject to their upstream licenses above.
