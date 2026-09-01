@@ -1,45 +1,27 @@
 import AppKit
 import ServiceManagement
+import ThemeSwitcherCore
 
-// NG-Thm-Ch — one-click Tokyo Night Storm / Rosé Pine Dawn across macOS + terminal tools.
+// ProDev Theme Switcher — one click, every tool, one theme.
 //
 // The macOS appearance is the single source of truth. This app flips it, then reacts to
-// AppleInterfaceThemeChangedNotification and shells out to ~/.config/theme-sync-all.sh,
-// which already knows how to theme Alacritty, tmux, Neovim, herdr and the zsh prompt.
-// Switching from Control Center or the auto sunset schedule therefore works for free.
+// AppleInterfaceThemeChangedNotification and shells out to sync.sh, which knows how to
+// theme Alacritty, tmux, Neovim, herdr, Claude Code and the zsh prompt. Switching from
+// Control Center or the auto sunset schedule therefore works for free.
+//
+// Themes are directories on disk, not code: the menu lists whatever is in
+// ~/.config/prodev-theme-switcher/themes, so adding one needs no rebuild.
 
 // MARK: - Model
+//
+// Mode, Theme, Target and Selection live in ThemeSwitcherCore: pure Foundation, so
+// CI can cover them without a window server. Everything below this point is AppKit
+// glue that only runs on a real desktop.
 
-enum Mode: String {
-    case dark, light
-    var flipped: Mode { self == .dark ? .light : .dark }
-    var symbol: String { self == .dark ? "moon.stars.fill" : "sun.max.fill" }
-    var title: String { self == .dark ? "Dark" : "Light" }
-    var theme: String { self == .dark ? "Tokyo Night Storm" : "Rosé Pine Dawn" }
-}
+let prefs = Selection(store: UserDefaults.standard)
+var installedThemes: [Theme] { Theme.load(root: Theme.defaultRoot) }
 
-/// Targets the menu can opt out of. rawValue is the token passed in NGTHMCH_SKIP.
-enum Target: String, CaseIterable {
-    case macos, alacritty, nvim, tmux, herdr, claude
-
-    var label: String {
-        switch self {
-        case .macos:     return "macOS"
-        case .alacritty: return "Alacritty"
-        case .nvim:      return "Neovim"
-        case .tmux:      return "tmux"
-        case .herdr:     return "herdr"
-        case .claude:    return "Claude Code"
-        }
-    }
-    private var key: String { "skip.\(rawValue)" }
-    var enabled: Bool {
-        get { !UserDefaults.standard.bool(forKey: key) }
-        set { UserDefaults.standard.set(!newValue, forKey: key) }
-    }
-}
-
-let syncScript = NSHomeDirectory() + "/.config/theme-sync-all.sh"
+let syncScript = NSHomeDirectory() + "/.config/prodev-theme-switcher/sync.sh"
 
 // MARK: - Auto appearance (sunrise/sunset)
 
@@ -98,8 +80,7 @@ func applyToApps(_ m: Mode) {
     // A GUI app does not inherit the login shell PATH; the script calls tmux/herdr bare.
     env["PATH"] = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:"
                 + NSHomeDirectory() + "/.local/bin"
-    env["NGTHMCH_SKIP"] = Target.allCases.filter { !$0.enabled }
-                                         .map(\.rawValue).joined(separator: ",")
+    for (k, v) in prefs.environment() { env[k] = v }
 
     let p = Process()
     p.executableURL = URL(fileURLWithPath: "/bin/bash")
@@ -111,7 +92,7 @@ func applyToApps(_ m: Mode) {
 }
 
 func toggle() {
-    if Target.macos.enabled {
+    if prefs.isEnabled(.macos) {
         setAutoAppearance(false)              // an explicit pick leaves Auto, as in System Settings
         setSystemMode(systemMode().flipped)   // observer fires applyToApps
     } else {
@@ -132,10 +113,10 @@ if let i = argv.firstIndex(of: "--set"), i + 1 < argv.count {
         applyToApps(systemMode())
     case let s where Mode(rawValue: s) != nil:
         let m = Mode(rawValue: s)!
-        if Target.macos.enabled { setAutoAppearance(false); setSystemMode(m) }
+        if prefs.isEnabled(.macos) { setAutoAppearance(false); setSystemMode(m) }
         applyToApps(m)
     default:
-        FileHandle.standardError.write("usage: ng-thm-ch --set dark|light|auto|toggle\n".data(using: .utf8)!)
+        FileHandle.standardError.write("usage: prodev-theme-switcher --set dark|light|auto|toggle\n".data(using: .utf8)!)
         exit(2)
     }
     Thread.sleep(forTimeInterval: 1.2)   // let the spawned script finish before we exit
@@ -177,7 +158,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                           accessibilityDescription: m.title)
         img?.isTemplate = true
         item.button?.image = img
-        item.button?.toolTip = "NG-Thm-Ch — \(m.theme)" + (auto ? " (Auto)" : "")
+        item.button?.toolTip = "ProDev Theme Switcher — \(prefs.displayName(for: m, in: installedThemes))" + (auto ? " (Auto)" : "")
     }
 
     @objc private func click() {
@@ -196,7 +177,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let m = systemMode()
 
         let auto = autoAppearance()
-        let header = NSMenuItem(title: "\(m.title) — \(m.theme)", action: nil, keyEquivalent: "")
+        let header = NSMenuItem(title: "\(m.title) — \(prefs.displayName(for: m, in: installedThemes))",
+                               action: nil, keyEquivalent: "")
         header.isEnabled = false
         menu.addItem(header)
         menu.addItem(.separator())
@@ -221,10 +203,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         menu.addItem(.separator())
 
+        // One submenu per mode, listing every installed theme for it. Picking the
+        // theme for the mode you are already in re-applies immediately; picking for
+        // the other mode just records it, so nothing flashes.
+        for mode in [Mode.light, .dark] {
+            let item = NSMenuItem(title: "\(mode.title) Theme", action: nil, keyEquivalent: "")
+            item.image = NSImage(systemSymbolName: mode.symbol.replacingOccurrences(of: ".fill", with: ""),
+                                 accessibilityDescription: nil)
+            let sub = NSMenu()
+            let themes = Theme.forMode(mode, in: installedThemes)
+            if themes.isEmpty {
+                let none = NSMenuItem(title: "None installed", action: nil, keyEquivalent: "")
+                none.isEnabled = false
+                sub.addItem(none)
+            }
+            for t in themes {
+                let ti = NSMenuItem(title: t.name, action: #selector(pickTheme(_:)), keyEquivalent: "")
+                ti.target = self
+                ti.state = t.slug == prefs.slug(for: mode) ? .on : .off
+                ti.representedObject = [mode.rawValue, t.slug]
+                sub.addItem(ti)
+            }
+            item.submenu = sub
+            menu.addItem(item)
+        }
+        menu.addItem(.separator())
+
         for t in Target.allCases {
             let i = NSMenuItem(title: t.label, action: #selector(toggleTarget(_:)), keyEquivalent: "")
             i.target = self
-            i.state = t.enabled ? .on : .off
+            i.state = prefs.isEnabled(t) ? .on : .off
             i.representedObject = t.rawValue
             menu.addItem(i)
         }
@@ -240,7 +248,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         login.state = SMAppService.mainApp.status == .enabled ? .on : .off
         menu.addItem(login)
 
-        let quit = NSMenuItem(title: "Quit NG-Thm-Ch", action: #selector(NSApp.terminate(_:)), keyEquivalent: "q")
+        let quit = NSMenuItem(title: "Quit ProDev Theme Switcher", action: #selector(NSApp.terminate(_:)), keyEquivalent: "q")
         menu.addItem(quit)
         return menu
     }
@@ -258,9 +266,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    @objc private func pickTheme(_ sender: NSMenuItem) {
+        guard let pair = sender.representedObject as? [String], pair.count == 2,
+              let mode = Mode(rawValue: pair[0]) else { return }
+        prefs.setSlug(pair[1], for: mode)
+        // Only repaint if this is the mode currently on screen.
+        if mode == systemMode() { applyToApps(mode) }
+        refreshIcon()
+    }
+
     @objc private func toggleTarget(_ sender: NSMenuItem) {
-        guard let raw = sender.representedObject as? String, var t = Target(rawValue: raw) else { return }
-        t.enabled.toggle()
+        guard let raw = sender.representedObject as? String, let t = Target(rawValue: raw) else { return }
+        prefs.setEnabled(!prefs.isEnabled(t), for: t)
     }
 
     @objc private func toggleLogin() {

@@ -1,0 +1,93 @@
+name: CI
+
+# macOS only by design: the app is a menu bar item that drives the system
+# appearance, so there is nothing to build or test on another platform.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Build, test, gate
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Swift version
+        run: swift --version
+
+      - name: Build
+        run: swift build -c release
+
+      - name: Unit tests
+        run: swift run core-tests
+
+      # The core is pure Foundation and must stay fully covered. main.swift is
+      # excluded because it cannot be: NSStatusItem, AppleScript and the SkyLight
+      # dlsym calls all need a window server, which no runner has.
+      - name: Coverage (ThemeSwitcherCore must be 100% of lines)
+        run: |
+          swift build --enable-code-coverage --product core-tests
+          BIN=$(swift build --enable-code-coverage --product core-tests --show-bin-path)
+          LLVM_PROFILE_FILE="$BIN/core.profraw" "$BIN/core-tests"
+          xcrun llvm-profdata merge -sparse "$BIN/core.profraw" -o "$BIN/core.profdata"
+          xcrun llvm-cov report "$BIN/core-tests" \
+            -instr-profile "$BIN/core.profdata" \
+            Sources/ThemeSwitcherCore/Core.swift | tee coverage.txt
+          PCT=$(awk '/Core.swift/ {gsub("%","",$(NF-3)); print $(NF-3)}' coverage.txt)
+          echo "line coverage: $PCT%"
+          awk -v p="$PCT" 'BEGIN { if (p+0 < 100) { print "::error::line coverage " p "% < 100%"; exit 1 } }'
+
+      - name: Sync script tests
+        run: ./tests/sync_test.sh
+
+      - name: Palette gate
+        run: python3 tests/palette_gate.py
+
+      # Smoke test: build the real bundle and drive the CLI end to end. The runner
+      # has no menu bar, so this asserts the app launches, applies a theme and
+      # rewrites the target configs -- not that anything is drawn.
+      - name: Smoke test
+        run: |
+          set -euo pipefail
+          make app
+          BIN="dist/ProDev Theme Switcher.app/Contents/MacOS/prodev-theme-switcher"
+          test -x "$BIN"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' \
+            "dist/ProDev Theme Switcher.app/Contents/Info.plist"
+          codesign --verify --verbose "dist/ProDev Theme Switcher.app"
+
+          # Install into a scratch HOME so the runner's own config is untouched, and
+          # skip macos: flipping the system appearance needs a window server.
+          export HOME="$RUNNER_TEMP/smoke"
+          mkdir -p "$HOME/.claude" "$HOME/.config/herdr"
+          printf '{\n  "theme": "auto"\n}\n' > "$HOME/.claude/settings.json"
+          printf '[theme]\nname = "placeholder"\n\n[ui]\n' > "$HOME/.config/herdr/config.toml"
+          make install-config
+
+          PDTS_SKIP=macos "$GITHUB_WORKSPACE/$BIN" --set light
+          grep -q 'custom:rose-pine-dawn' "$HOME/.claude/settings.json"
+          grep -q 'rose-pine-dawn' "$HOME/.local/share/nvim/theme_state.txt"
+          PDTS_SKIP=macos "$GITHUB_WORKSPACE/$BIN" --set dark
+          grep -q 'custom:tokyo-night-storm' "$HOME/.claude/settings.json"
+          grep -q 'tokyonight-storm' "$HOME/.local/share/nvim/theme_state.txt"
+          echo "smoke: light and dark both applied"
+
+      - name: Theme JSON is valid and complete
+        run: |
+          for f in config/themes/*/claude.json; do
+            python3 -c "
+import json,sys
+d=json.load(open('$f'))
+assert d['base'] in ('light','dark'), d['base']
+assert len(d['overrides']) >= 50, len(d['overrides'])
+for k,v in d['overrides'].items():
+    assert v.startswith('#') and len(v)==7, (k,v)
+print('$f', d['base'], len(d['overrides']), 'overrides')"
+          done

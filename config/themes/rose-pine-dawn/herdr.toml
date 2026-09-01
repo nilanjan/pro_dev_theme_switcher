@@ -1,0 +1,17 @@
+[theme.custom]
+panel_bg    = "#ded3d6"   # iris @ 0.8 over the canvas -- the tab bar strip
+surface0    = "#f2e9e1"   # canvas
+surface1    = "#cecacd"   # borders, dividers
+surface_dim = "#ded3d6"   # the selected sidebar row band
+overlay0    = "#d5c8d0"   # iris @ 0.7 -- inactive pane borders, deliberately
+                          # lighter than the active border (4.07:1 apart)
+overlay1    = "#797593"   # muted, 3.67:1
+text        = "#575279"   # 6.07:1
+subtext0    = "#797593"   # 3.67:1
+mauve       = "#907aa9"   # iris,          3.16:1
+green       = "#286983"   # pine,          5.09:1
+yellow      = "#bf7614"   # gold darkened, 3.01:1
+red         = "#b4637a"   # love,          3.50:1
+blue        = "#53909a"   # foam darkened, 3.01:1
+teal        = "#53909a"   # foam darkened, 3.01:1
+peach       = "#cf6864"   # rose darkened, 3.01:1

@@ -2,10 +2,10 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>CFBundleName</key><string>NG-Thm-Ch</string>
-  <key>CFBundleDisplayName</key><string>NG-Thm-Ch</string>
-  <key>CFBundleExecutable</key><string>ng-thm-ch</string>
-  <key>CFBundleIdentifier</key><string>com.nilg.NG-Thm-Ch</string>
+  <key>CFBundleName</key><string>ProDev Theme Switcher</string>
+  <key>CFBundleDisplayName</key><string>ProDev Theme Switcher</string>
+  <key>CFBundleExecutable</key><string>prodev-theme-switcher</string>
+  <key>CFBundleIdentifier</key><string>com.nilg.ProDevThemeSwitcher</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>1.0</string>
   <key>CFBundleVersion</key><string>1</string>
@@ -13,6 +13,6 @@
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>LSUIElement</key><true/>
   <key>NSAppleEventsUsageDescription</key>
-  <string>NG-Thm-Ch switches the macOS light/dark appearance for you.</string>
+  <string>ProDev Theme Switcher switches the macOS light/dark appearance for you.</string>
 </dict>
 </plist>
