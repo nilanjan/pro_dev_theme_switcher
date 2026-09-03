@@ -41,6 +41,9 @@
     "chromeYellow": "#bf7614",
     "rate_limit_fill": "#907aa9",
     "rate_limit_empty": "#cecacd",
+    "fastMode": "#cf6864",
+    "fastModeShimmer": "#d98c87",
+    "effortUltra": "#907aa9",
     "briefLabelYou": "#286983",
     "briefLabelClaude": "#b4637a",
     "diffAdded": "#ced2d0",
@@ -56,6 +59,20 @@
     "purple_FOR_SUBAGENTS_ONLY": "#907aa9",
     "orange_FOR_SUBAGENTS_ONLY": "#cf6864",
     "pink_FOR_SUBAGENTS_ONLY": "#cf6864",
-    "cyan_FOR_SUBAGENTS_ONLY": "#53909a"
+    "cyan_FOR_SUBAGENTS_ONLY": "#53909a",
+    "rainbow_red": "#b4637a",
+    "rainbow_orange": "#cf6864",
+    "rainbow_yellow": "#bf7614",
+    "rainbow_green": "#286983",
+    "rainbow_blue": "#53909a",
+    "rainbow_indigo": "#797593",
+    "rainbow_violet": "#907aa9",
+    "rainbow_red_shimmer": "#c58997",
+    "rainbow_orange_shimmer": "#d98c87",
+    "rainbow_yellow_shimmer": "#cd964d",
+    "rainbow_green_shimmer": "#618d9d",
+    "rainbow_blue_shimmer": "#80a9ae",
+    "rainbow_indigo_shimmer": "#9893a5",
+    "rainbow_violet_shimmer": "#ab99b9"
   }
 }

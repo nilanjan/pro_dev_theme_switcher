@@ -81,7 +81,7 @@ public struct Theme: Equatable, Sendable {
 
 /// Targets the menu can opt out of. rawValue is the token passed in PDTS_SKIP.
 public enum Target: String, CaseIterable, Sendable {
-    case macos, alacritty, nvim, tmux, herdr, claude
+    case macos, alacritty, nvim, tmux, herdr, claude, opencode
 
     public var label: String {
         switch self {
@@ -91,6 +91,7 @@ public enum Target: String, CaseIterable, Sendable {
         case .tmux:      return "tmux"
         case .herdr:     return "herdr"
         case .claude:    return "Claude Code"
+        case .opencode:  return "OpenCode"
         }
     }
     public var prefsKey: String { "skip.\(rawValue)" }
@@ -107,6 +108,7 @@ public enum Target: String, CaseIterable, Sendable {
         case .tmux:      return ["\(home)/.tmux", "\(home)/.config/tmux", "\(home)/.tmux.conf"]
         case .herdr:     return ["\(home)/.config/herdr/config.toml"]
         case .claude:    return ["\(home)/.claude"]
+        case .opencode:  return ["\(home)/.config/opencode"]
         }
     }
 

@@ -247,18 +247,70 @@ import = [\"$apath\"]
     cp "$dir/claude.json" "$HOME/.claude/themes/.prodev-theme-switcher.json.tmp"
     mv -f "$HOME/.claude/themes/.prodev-theme-switcher.json.tmp" "$HOME/.claude/themes/prodev-theme-switcher.json"
     backup "$claude_cfg"
+    # Decide with the parser, edit with text. plutil -extract addresses the TOP
+    # LEVEL by key path; grep does not. Grepping for "theme" also matches a nested
+    # one (a statusLine or plugin block), and grepping for the ref value matches it
+    # anywhere -- a permission rule, customInstructions. Both used to end the same
+    # way: the top-level key never got written, Claude Code could not resolve the
+    # slug, and it fell back to its BUILT-IN DARK palette without a word. That is
+    # the failure this whole block exists to prevent, so it is verified, not assumed.
+    claude_theme() { /usr/bin/plutil -extract theme raw "$claude_cfg" 2>/dev/null || true; }
     if [[ ! -f "$claude_cfg" || -z "$(tr -d '[:space:]{}' < "$claude_cfg")" ]]; then
       # a fresh install has no settings.json, or an empty one -- which plutil
       # would misread as an OpenStep plist and refuse to write back
       printf '{\n  "theme": "%s"\n}\n' "$claude_ref" > "$claude_cfg"
-    elif grep -qF "\"$claude_ref\"" "$claude_cfg"; then
-      :   # already pinned; rewriting settings.json for nothing would only churn it
-    elif grep -qE '"theme"[[:space:]]*:' "$claude_cfg"; then
-      /usr/bin/sed -i '' -E \
-        "s/(\"theme\"[[:space:]]*:[[:space:]]*)\"[^\"]*\"/\1\"$claude_ref\"/" "$claude_cfg"
-    else
-      # plutil reads JSON as a plist and writes it back as JSON; -r keeps it readable
-      /usr/bin/plutil -replace theme -string "$claude_ref" -r "$claude_cfg"
+    elif [[ "$(claude_theme)" != "$claude_ref" ]]; then
+      if /usr/bin/grep -qE '^[[:space:]]{0,2}(\{[[:space:]]*)?"theme"[[:space:]]*:' "$claude_cfg"; then
+        /usr/bin/sed -i '' -E \
+          "s|^([[:space:]]{0,2}(\{[[:space:]]*)?\"theme\"[[:space:]]*:[[:space:]]*)\"[^\"]*\"|\1\"$claude_ref\"|" "$claude_cfg"
+      else
+        # Insert just after the opening brace. plutil would also work here, but it
+        # rewrites the whole file and alphabetises every key -- on a settings.json
+        # someone has curated that is a hiccup, not a theme switch.
+        /usr/bin/sed -i '' "1s|^[[:space:]]*{|{\\
+  \"theme\": \"$claude_ref\",|" "$claude_cfg"
+      fi
+      # Whatever shape the file was in, it now says what we think it says -- or
+      # plutil rewrites it. Never silently leave it unset.
+      [[ "$(claude_theme)" == "$claude_ref" ]] || \
+        /usr/bin/plutil -replace theme -string "$claude_ref" -r "$claude_cfg"
+    fi
+  fi
+
+  # OpenCode, same shape as Claude Code: one fixed theme file, rewritten on every
+  # switch, and the config key pinned once. Two deliberate choices:
+  #
+  #   * The tokens are written as plain hex, not as {"dark":…,"light":…} variants.
+  #     OpenCode supports variants, but it picks between them by sniffing the
+  #     terminal background -- the same detection that leaves Claude Code stale
+  #     mid-session. The mode is ours to decide, so we decide it.
+  #   * The theme lives in tui.json (or tui.jsonc, which OpenCode prefers when both
+  #     exist), NOT opencode.json. That moved; writing the old place would be
+  #     another file nothing reads.
+  oc_dir="$HOME/.config/opencode"
+  oc_ref="prodev-theme-switcher"
+  if ! skip opencode && [[ -d "$oc_dir" ]] && [[ -f "$dir/opencode.json" ]]; then
+    mkdir -p "$oc_dir/themes"
+    cp "$dir/opencode.json" "$oc_dir/themes/.$oc_ref.json.tmp"
+    mv -f "$oc_dir/themes/.$oc_ref.json.tmp" "$oc_dir/themes/$oc_ref.json"
+    oc_cfg="$oc_dir/tui.json"
+    [[ -f "$oc_dir/tui.jsonc" ]] && oc_cfg="$oc_dir/tui.jsonc"
+    backup "$oc_cfg"
+    # tui.json is parsed as JSONC, so plutil is no help here -- a file with comments
+    # is valid to OpenCode and unreadable to plutil. Anchor to the top level instead,
+    # and check afterwards rather than assuming, for the same reason as Claude Code.
+    oc_pinned() { /usr/bin/grep -qE "^[[:space:]]{0,2}(\{[[:space:]]*)?\"theme\"[[:space:]]*:[[:space:]]*\"$oc_ref\"" "$oc_cfg"; }
+    if [[ ! -f "$oc_cfg" || -z "$(tr -d '[:space:]{}' < "$oc_cfg")" ]]; then
+      printf '{\n  "$schema": "https://opencode.ai/tui.json",\n  "theme": "%s"\n}\n' "$oc_ref" > "$oc_cfg"
+    elif ! oc_pinned; then
+      if /usr/bin/grep -qE '^[[:space:]]{0,2}(\{[[:space:]]*)?"theme"[[:space:]]*:' "$oc_cfg"; then
+        /usr/bin/sed -i '' -E \
+          "s|^([[:space:]]{0,2}(\{[[:space:]]*)?\"theme\"[[:space:]]*:[[:space:]]*)\"[^\"]*\"|\1\"$oc_ref\"|" "$oc_cfg"
+      else
+        /usr/bin/sed -i '' "1s|^[[:space:]]*{|{\\
+  \"theme\": \"$oc_ref\",|" "$oc_cfg"
+      fi
+      oc_pinned || echo "prodev-theme-switcher: could not pin \"theme\" in $oc_cfg; set it to \"$oc_ref\" by hand" >&2
     fi
   fi
 

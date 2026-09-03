@@ -6,7 +6,8 @@
 
 **One click. Your whole terminal stack changes theme together.**
 
-macOS appearance, Alacritty, tmux, Neovim, herdr and Claude Code — light or dark,
+macOS appearance, Alacritty, tmux, Neovim, herdr, Claude Code and OpenCode — light or
+dark,
 in step, in about a second.
 
 [![CI](https://github.com/nilanjan/pro_dev_theme_switcher/actions/workflows/ci.yml/badge.svg)](https://github.com/nilanjan/pro_dev_theme_switcher/actions/workflows/ci.yml)
@@ -67,6 +68,7 @@ tmux          ~/.tmux.conf                        — adds a source-file line
 Neovim        ~/.config/nvim/init.lua             — adds a require line
 herdr         ~/.config/herdr/config.toml         — [theme], [ui] accent, [theme.custom]
 Claude Code   ~/.claude/settings.json             — "theme"
+OpenCode      ~/.config/opencode/tui.json         — "theme"
 
 Each file is copied once, before its first edit, to
 ~/.config/prodev-theme-switcher/backup/original.
@@ -119,6 +121,7 @@ Light — Rosé Pine Dawn                 current mode and theme
   tmux                    ✓
   herdr — not installed              detected, greyed out
   Claude Code             ✓
+  OpenCode — not installed           detected, greyed out
   VS Code — follows macOS            native, never touched
 ──────────────────────────
   Launch at Login         ✓
@@ -169,6 +172,7 @@ appears in the right submenu on the next right-click — nothing is compiled in.
 | `nvim.lua` | base46 theme table |
 | `herdr.toml` | the `[theme.custom]` block |
 | `claude.json` | Claude Code custom theme |
+| `opencode.json` | OpenCode custom theme |
 
 `meta` exists because a slug is not always what a target calls the same theme:
 `tokyo-night-storm` is `tokyonight-storm` to base46 and `tokyo-night` to herdr.
@@ -210,6 +214,7 @@ dotfiles happened to read — and did nothing on anyone else's Mac.
 | Neovim | state file + `lua/prodev_theme.lua`, required from the end of `init.lua`; applies the colorscheme if its plugin is installed ([tokyonight.nvim](https://github.com/folke/tokyonight.nvim), [rose-pine/neovim](https://github.com/rose-pine/neovim)), else flips `background`; re-checked on `FocusGained`. The base46 table is also installed for NvChad |
 | herdr | `[theme] name` (table created if absent), `[ui] accent`, managed `[theme.custom]` block + `server reload-config` |
 | Claude Code | one fixed theme file, `~/.claude/themes/prodev-theme-switcher.json`, rewritten on every switch; `settings.json` pinned once to `theme: custom:prodev-theme-switcher` (key added, or the file created, if missing). Claude Code watches that directory but reads the key only at startup, so the fixed slug is what lets a **running** session follow the switch; `/theme` shows it under the current theme's name |
+| OpenCode | the same shape: one fixed theme file, `~/.config/opencode/themes/prodev-theme-switcher.json`, rewritten on every switch, with `tui.json` (or `tui.jsonc`, which OpenCode prefers) pinned once to `theme: prodev-theme-switcher`. Tokens are written as plain hex rather than `{dark, light}` variants **on purpose** — OpenCode chooses between variants by sniffing the terminal background, and the mode is already decided here |
 | VS Code | native `window.autoDetectColorScheme` — untouched |
 
 `sync.sh` takes a `mkdir` mutex: the app invokes it directly *and* from its
@@ -245,7 +250,7 @@ until the label clears 4.5:1.
 | `swift run core-tests` | 126 checks over `ThemeSwitcherCore` — **100% of lines and functions** |
 | `./tests/sync_test.sh` | `sync.sh` against a throwaway `HOME` shaped like a **fresh Mac** — bare configs, none of the author's dotfile hooks: every target gets wired in exactly once, originals are backed up and `--restore` puts them back, a real `tmux` started on the edited conf shows the theme; plus slug resolution, opt-out, fallback, the herdr block never accumulating |
 | `python3 tests/palette_gate.py` | contrast and surface rules for every shipped theme |
-| `python3 tests/theme_json_test.py` | Claude Code themes parse and are complete — its loader drops malformed overrides silently |
+| `python3 tests/theme_json_test.py` | Claude Code and OpenCode themes parse and set **every** key the tool defines. Both loaders fail quietly: Claude Code drops an unknown key without a word and falls back to its built-in palette for one you omit, so a theme can be valid and still leak stock colours |
 | `./check.sh` | the live machine, end to end; restores the appearance it found |
 
 `main.swift` is deliberately not covered: `NSStatusItem`, AppleScript and the
@@ -283,7 +288,7 @@ make uninstall
 > `~/.config/prodev-theme-switcher/backup/original`, and `sync.sh --restore` puts them
 > back. Hand-edits inside the managed regions are lost on the next switch.
 >
-> **Not affiliated with** Apple, Anthropic, Alacritty, tmux, Neovim, herdr,
+> **Not affiliated with** Apple, Anthropic, Alacritty, tmux, Neovim, herdr, OpenCode,
 > Microsoft or GitHub. Bundled palettes are **modified** adaptations — see
 > [Credits](#credits) for full attribution and exactly what was changed.
 >
@@ -330,7 +335,7 @@ unchanged.
 
 - **[alacritty/alacritty-theme](https://github.com/alacritty/alacritty-theme)** (Apache-2.0) — the upstream Alacritty ports both palettes were merged from.
 - **[NvChad/base46](https://github.com/NvChad/base46)**, building on **nvim-base16** by **Ashkan Kiani** (MIT) — the Neovim theme-table format `nvim.lua` targets.
-- **[herdr](https://herdr.dev)** and **[Claude Code](https://claude.com/claude-code)** — theme formats written against, neither affiliated with nor endorsing this project.
+- **[herdr](https://herdr.dev)**, **[Claude Code](https://claude.com/claude-code)** and **[OpenCode](https://opencode.ai)** — theme formats written against, none affiliated with nor endorsing this project.
 
 All product names and trademarks belong to their respective owners and are used only
 to describe interoperability.

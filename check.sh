@@ -42,7 +42,18 @@ for m in dark light; do
   eq claude-thm "$(python3 -c "
 import json,pathlib
 d=json.load(open(pathlib.Path.home()/'.claude/themes/prodev-theme-switcher.json'))
-print(f\"{d['base']}:{len(d['overrides'])}\")" 2>/dev/null)"                                 "$m:55"
+print(f\"{d['base']}:{len(d['overrides'])}\")" 2>/dev/null)"                                 "$m:72"
+  # OpenCode is optional on this machine, so report rather than fail when absent --
+  # the sync tests cover the wiring, this only confirms the live install.
+  if [[ -d "$HOME/.config/opencode" ]]; then
+    occfg="$HOME/.config/opencode/tui.json"; [[ -f "$HOME/.config/opencode/tui.jsonc" ]] && occfg="$HOME/.config/opencode/tui.jsonc"
+    eq opencode  "$(sed -n 's|.*"theme"[[:space:]]*:[[:space:]]*"\([^"]*\)".*|\1|p' "$occfg" 2>/dev/null | head -1)" "prodev-theme-switcher"
+    eq opencode-bg "$(python3 -c "
+import json,pathlib
+print(json.load(open(pathlib.Path.home()/'.config/opencode/themes/prodev-theme-switcher.json'))['theme']['background'])" 2>/dev/null)" "${cust#15:}"
+  else
+    ok opencode "(not installed)"
+  fi
   eq herdr     "$(sed -n '/^\[theme\]/,/^\[/p' ~/.config/herdr/config.toml | sed -n 's/^name = "\(.*\)"/\1/p')" "$hd"
   # The chip label is surface_dim, shared with the selected sidebar row, so it
   # cannot be darkened alone -- the accent fill is darkened instead until the

@@ -2,7 +2,7 @@
 # Contrast and surface gate for every shipped theme. Split out of check.sh so CI can
 # run it: it reads config/themes/ only and needs no app, no GUI and no appearance
 # flipping. check.sh runs it too, so there is one copy of the rules.
-import re, pathlib, sys
+import json, re, pathlib, sys
 HOME = pathlib.Path.home()
 
 def luma(h):
@@ -93,5 +93,32 @@ for mode in ("dark", "light"):
             row(bool(m) and luma(m.group(1)) <= luma(bg) + 1e-9,
                 f"surface {tok}",
                 f"{m.group(1)} at or below canvas" if m else "MISSING from herdr.toml")
+
+    # OpenCode gets the same two rules as everything else, by role: its background
+    # IS the canvas, its other surfaces sit at or below it in a light theme, and
+    # everything that is drawn as text clears the mode's floor on that canvas.
+    oc = json.loads((tdir / "opencode.json").read_text())["theme"]
+    SURFACES = {"background", "backgroundPanel", "backgroundElement", "backgroundMenu",
+                "border", "borderSubtle", "diffAddedBg", "diffRemovedBg", "diffContextBg",
+                "diffAddedLineNumberBg", "diffRemovedLineNumberBg"}
+    row(oc["background"] == bg, "opencode canvas", f"{oc['background']} == alacritty {bg}")
+    worst, worst_tok = 99.0, ""
+    surf_bad = []
+    for tok, val in oc.items():
+        if tok in SURFACES:
+            if mode == "light" and luma(val) > luma(bg) + 1e-9:
+                surf_bad.append(f"{tok} {val}")
+        elif tok == "selectedListItemText":
+            # Drawn on the accent fill, never on the canvas, so it is gated there.
+            r = cr(val, oc["primary"])
+            row(r >= need, "opencode selected text", f"{val} on primary = {r:.2f}:1")
+        else:
+            r = cr(bg, val)
+            if r < worst:
+                worst, worst_tok = r, tok
+    row(not surf_bad, "opencode surfaces",
+        "all at or below canvas" if not surf_bad else ", ".join(surf_bad))
+    row(worst >= need, "opencode text floor",
+        f"worst is {worst_tok} at {worst:.2f}:1 (need >={need})")
 
 sys.exit(bad)

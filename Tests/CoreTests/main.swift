@@ -84,7 +84,7 @@ T.suite("Theme.load") {
 // MARK: - targets
 
 T.suite("Target") {
-    T.eq(Target.allCases.count, 6, "six targets")
+    T.eq(Target.allCases.count, 7, "seven targets")
     for t in Target.allCases {
         T.ok(!t.label.isEmpty, "\(t.rawValue) has a label")
         T.eq(t.prefsKey, "skip.\(t.rawValue)", "\(t.rawValue) prefs key")
@@ -95,13 +95,14 @@ T.suite("Target") {
     T.eq(Target.tmux.label, "tmux", "tmux label")
     T.eq(Target.herdr.label, "herdr", "herdr label")
     T.eq(Target.claude.label, "Claude Code", "claude label")
+    T.eq(Target.opencode.label, "OpenCode", "opencode label")
 
     T.eq(Target.skipList(disabled: []), "", "nothing disabled")
     // Built from allCases rather than the Set, so the value does not churn between
     // runs purely because Set iteration order changed.
     T.eq(Target.skipList(disabled: [.claude, .macos, .nvim]), "macos,nvim,claude", "declaration order")
     T.eq(Target.skipList(disabled: Set(Target.allCases)),
-         "macos,alacritty,nvim,tmux,herdr,claude", "all disabled")
+         "macos,alacritty,nvim,tmux,herdr,claude,opencode", "all disabled")
 
     T.eq(Target.skipEnvKey, "PDTS_SKIP", "env key matches sync.sh")
     T.eq(Target.parseSkipList("herdr,claude"), [.herdr, .claude], "parses a list")
@@ -267,10 +268,10 @@ T.suite("Selection honours what is installed") {
     // config for a tool the user does not have.
     T.ok(!sel.isEnabled(.herdr, installed: installed), "ticked but not installed")
     T.ok(sel.isEnabled(.herdr), "no list given -> no opinion, stays enabled")
-    T.eq(sel.disabledTargets(installed: installed), [.alacritty, .tmux, .herdr, .claude],
+    T.eq(sel.disabledTargets(installed: installed), [.alacritty, .tmux, .herdr, .claude, .opencode],
          "everything absent is disabled")
     T.eq(sel.environment(installed: installed)["PDTS_SKIP"],
-         "alacritty,tmux,herdr,claude", "and is passed to sync.sh")
+         "alacritty,tmux,herdr,claude,opencode", "and is passed to sync.sh")
 
     // The stored preference must survive a tool being removed and reinstalled.
     let s2 = Selection(store: MemoryStore())

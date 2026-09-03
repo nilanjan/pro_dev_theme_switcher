@@ -184,6 +184,76 @@ fresh; rm "$SANDBOX/.claude/settings.json"
 run light
 eq "theme key in a new settings.json" "$(plutil -extract theme raw "$SANDBOX/.claude/settings.json" 2>&1)" "custom:prodev-theme-switcher"
 
+echo "== the Claude theme key lands whatever shape settings.json is in =="
+# Every one of these used to end with no TOP-LEVEL "theme" key, which Claude Code
+# resolves to its built-in dark palette in silence -- light terminal, dark colours.
+claude_theme(){ /usr/bin/plutil -extract theme raw "$SANDBOX/.claude/settings.json" 2>&1 | head -1; }
+fresh; printf '{\n  "permissions": {},\n  "statusLine": { "type": "command", "theme": "powerline-dark" }\n}\n' > "$SANDBOX/.claude/settings.json"
+run light
+eq "nested \"theme\" does not absorb the write" "$(claude_theme)" "custom:prodev-theme-switcher"
+eq "…and the nested key is left alone"          "$(python3 -c "import json;print(json.load(open('$SANDBOX/.claude/settings.json'))['statusLine']['theme'])" 2>&1)" "powerline-dark"
+
+fresh; printf '{\n  "theme": "dark",\n  "autoMode": { "soft_deny": ["do not touch custom:prodev-theme-switcher"] }\n}\n' > "$SANDBOX/.claude/settings.json"
+run light
+eq "the ref appearing elsewhere is not 'already pinned'" "$(claude_theme)" "custom:prodev-theme-switcher"
+
+fresh; printf '{\n  "env": { "FOO": "bar" },\n  "model": "opus"\n}\n' > "$SANDBOX/.claude/settings.json"
+run light
+eq "no theme key: one is inserted"   "$(claude_theme)" "custom:prodev-theme-switcher"
+# plutil would alphabetise every key; someone's curated settings.json is not ours to reorder.
+eq "…without reordering their keys" "$(python3 -c "import json;print(','.join(json.load(open('$SANDBOX/.claude/settings.json'))))" 2>&1)" "theme,env,model"
+
+echo "== OpenCode: themed when installed, untouched when not =="
+# Same shape as Claude Code -- one fixed theme file rewritten per switch, the key
+# pinned once -- so the same failure applies: a "theme" that names a file OpenCode
+# cannot find leaves it on its default. tui.json is JSONC, so this is checked by
+# reading the file, not by plutil (which cannot parse a comment).
+oc_theme(){ sed -n 's|.*"theme"[[:space:]]*:[[:space:]]*"\([^"]*\)".*|\1|p' "$SANDBOX/.config/opencode/$1" | head -1; }
+oc_bg(){ python3 -c "import json;print(json.load(open('$SANDBOX/.config/opencode/themes/prodev-theme-switcher.json'))['theme']['background'])" 2>&1; }
+
+fresh; mkdir -p "$SANDBOX/.config/opencode"          # installed, never configured
+run light
+eq "tui.json created and pinned"  "$(oc_theme tui.json)" "prodev-theme-switcher"
+eq "theme file is the light one"  "$(oc_bg)"             "#f2e9e1"
+run dark
+eq "same file, dark colours"      "$(oc_bg)"             "#24283b"
+eq "…and the key is not rewritten" "$(grep -c '"theme"' "$SANDBOX/.config/opencode/tui.json")" "1"
+
+fresh; mkdir -p "$SANDBOX/.config/opencode"
+printf '{\n  // mine\n  "theme": "gruvbox",\n  "scroll_speed": 3\n}\n' > "$SANDBOX/.config/opencode/tui.json"
+run light
+eq "an existing theme is replaced"      "$(oc_theme tui.json)" "prodev-theme-switcher"
+has "…and the JSONC comment survives"   '// mine' "$SANDBOX/.config/opencode/tui.json"
+
+fresh; mkdir -p "$SANDBOX/.config/opencode"
+printf '{ "theme": "nord" }\n' > "$SANDBOX/.config/opencode/tui.json"
+run light
+# A one-line object put "theme" past a start-of-line anchor, so the key was
+# INSERTED alongside the old one -- two "theme" keys, and JSON takes the last.
+eq "a one-line tui.json is edited, not duplicated" "$(grep -c '"theme"' "$SANDBOX/.config/opencode/tui.json")" "1"
+eq "…and it is ours"                               "$(oc_theme tui.json)" "prodev-theme-switcher"
+
+fresh; mkdir -p "$SANDBOX/.config/opencode"
+printf '{\n  "cursor": { "theme": "block" }\n}\n' > "$SANDBOX/.config/opencode/tui.json"
+run light
+eq "a nested theme does not absorb the write" "$(oc_theme tui.json)" "prodev-theme-switcher"
+has "…and the nested one is left alone"       '"theme": "block"' "$SANDBOX/.config/opencode/tui.json"
+
+fresh; mkdir -p "$SANDBOX/.config/opencode"
+printf '{ "theme": "nord" }\n' > "$SANDBOX/.config/opencode/tui.json"
+printf '{ "theme": "nord" }\n' > "$SANDBOX/.config/opencode/tui.jsonc"
+run light
+eq "tui.jsonc wins when both exist" "$(oc_theme tui.jsonc)" "prodev-theme-switcher"
+eq "…and tui.json is left alone"    "$(oc_theme tui.json)"  "nord"
+
+fresh   # no ~/.config/opencode at all
+run light
+[[ -e "$SANDBOX/.config/opencode" ]] && no "not installed: nothing invented" "created" || ok "not installed: nothing invented"
+
+fresh; mkdir -p "$SANDBOX/.config/opencode"
+PDTS_SKIP=opencode run light
+[[ -e "$SANDBOX/.config/opencode/themes" ]] && no "PDTS_SKIP=opencode honoured" "themed anyway" || ok "PDTS_SKIP=opencode honoured"
+
 echo "== originals are backed up once, before the first edit, and --restore puts them back =="
 fresh
 run light; run dark
@@ -218,7 +288,7 @@ eq "installed copy can re-run --install harmlessly" "$?" "0"
 echo "== every shipped theme is complete =="
 for d in "$REPO"/config/themes/*/; do
   slug=$(basename "$d")
-  for f in meta alacritty.toml tmux.conf nvim.lua herdr.toml claude.json; do
+  for f in meta alacritty.toml tmux.conf nvim.lua herdr.toml claude.json opencode.json; do
     [[ -f "$d/$f" ]] && ok "$slug/$f" || no "$slug/$f" "absent"
   done
   # A theme that `import`s a file outside the repo is broken on any machine that
